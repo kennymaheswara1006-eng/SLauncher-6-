@@ -1,0 +1,188 @@
+<resources>
+    <string name="app_name">SLauncher 6</string>
+    <string name="search_apps_hint">Search apps…</string>
+    <string name="cd_clear_search">Clear search</string>
+    <string name="cd_open_drawer">Open all apps drawer</string>
+    <string name="cd_close_drawer">Close all apps drawer</string>
+    <string name="cd_customize_favorites">Customize favorite apps</string>
+    <string name="cd_open_settings">Open launcher settings</string>
+    <string name="cd_lock_screen">Preview lock screen</string>
+    <string name="cd_app_icon">%1$s app icon</string>
+    <string name="cd_battery_indicator">Battery %1$d percent</string>
+    <string name="cd_charging_indicator">Charging</string>
+    <string name="favorites_section_label">Pinned</string>
+    <string name="home_apps_section_label">Apps (%1$d)</string>
+    <string name="edit_favorites">Edit Favorites</string>
+    <string name="empty_favorites_title">Pin your essential apps</string>
+    <string name="empty_favorites_subtitle">Tap Edit Favorites or long-press any app to pin up to 7 apps here.</string>
+    <string name="all_apps_title">All Apps</string>
+    <string name="all_apps_count">%1$d apps</string>
+    <string name="no_search_results">No apps match \"%1$s\"</string>
+    <string name="loading_apps">Loading apps…</string>
+    <string name="favorites_dialog_title">Favorite Apps</string>
+    <string name="favorites_dialog_subtitle">Select %1$d–%2$d apps (%3$d/%2$d selected)</string>
+    <string name="favorites_limit_reached">Maximum %1$d favorites allowed</string>
+    <string name="action_done">Done</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_pin">Pin</string>
+    <string name="action_unpin">Unpin</string>
+    <string name="action_app_info">App info</string>
+    <string name="action_open">Open</string>
+    <string name="action_dismiss">Dismiss</string>
+    <string name="battery_charging_format">%1$d%% ⚡</string>
+    <string name="battery_format">%1$d%%</string>
+    <string name="launch_error">Unable to open %1$s</string>
+    <string name="pinned_badge">Pinned</string>
+    <string name="drawer_hint_long_press">Long-press an app to pin or view info</string>
+
+    <!-- Welcome & Dynamic Notifications -->
+    <string name="default_welcome_message">Hello, Welcome</string>
+    <string name="dynamic_notif_now">Now</string>
+    <string name="dynamic_notif_active_count">%1$d notifications</string>
+    <string name="dynamic_notif_grant_prompt">Tap to enable Dynamic Notifications</string>
+    <string name="dynamic_notif_test_title">SLauncher 6 Dynamic Alert</string>
+    <string name="dynamic_notif_test_body">Live notifications appear smoothly right here.</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">SLauncher 6 Settings</string>
+    <string name="settings_subtitle">Personalize home, wallpaper, lock screen, and permissions</string>
+    <string name="settings_section_language">Language</string>
+    <string name="lang_system">Follow Device Language</string>
+    <string name="lang_indonesian">Bahasa Indonesia</string>
+    <string name="lang_english">English</string>
+
+    <!-- Wallpaper Picker -->
+    <string name="settings_section_wallpaper">Wallpaper</string>
+    <string name="wallpaper_system">System Live</string>
+    <string name="wallpaper_alpine_peaks">Alpine Peaks</string>
+    <string name="wallpaper_ocean_shells">Ocean Shore</string>
+    <string name="wallpaper_twilight_branches">Twilight Canopy</string>
+    <string name="wallpaper_sunlit_cedar">Sunlit Cedar</string>
+    <string name="wallpaper_pastel_shore">Pastel Coast</string>
+    <string name="wallpaper_starry_pines">Starry Pines</string>
+    <string name="wallpaper_cobalt_oak">Cobalt Silhouettes</string>
+    <string name="wallpaper_tropical_palm">Tropical Palm</string>
+    <string name="wallpaper_misty_forest">Misty Forest</string>
+    <string name="wallpaper_add_photo">Add Photo</string>
+    <string name="wallpaper_custom_label">My Photo %1$d</string>
+    <string name="wallpaper_remove_custom_cd">Remove custom photo</string>
+    <string name="wallpaper_import_error">Unable to load selected photo</string>
+    <string name="wallpaper_apply_system">Apply to System Wallpaper</string>
+    <string name="wallpaper_applied_toast">Wallpaper applied to system Home &amp; Lock Screen</string>
+    <string name="wallpaper_apply_error">Could not update system wallpaper</string>
+
+    <!-- Permissions & Setup -->
+    <string name="permissions_title">Permissions &amp; Setup</string>
+    <string name="permissions_subtitle">Grant permissions so SLauncher 6 runs smoothly</string>
+    <string name="perm_notifications_title">Notifications Permission</string>
+    <string name="perm_notifications_desc">Allows SLauncher 6 to display status alerts smoothly</string>
+    <string name="perm_notif_listener_title">Dynamic Notification Access</string>
+    <string name="perm_notif_listener_desc">Reads live notifications for the top Dynamic Capsule &amp; Lock Screen</string>
+    <string name="perm_default_home_title">Default Home Launcher</string>
+    <string name="perm_default_home_desc">Keeps SLauncher 6 active when you press the Home button</string>
+    <string name="perm_status_granted">Active</string>
+    <string name="perm_status_pending">Required</string>
+    <string name="perm_action_allow">Allow</string>
+    <string name="perm_action_setup">Set Up</string>
+    <string name="perm_banner_button">Setup Permissions</string>
+    <string name="perm_all_ready">All core permissions are active</string>
+
+    <string name="settings_section_welcome">Welcome Dynamic Pop-Up</string>
+    <string name="settings_welcome_toggle">Show welcome pop-up</string>
+    <string name="settings_welcome_desc">Appears smoothly for 3 seconds then retracts upward</string>
+    <string name="settings_welcome_input_label">Custom welcome text</string>
+    <string name="settings_welcome_input_hint">Leave blank for default: %1$s</string>
+    <string name="settings_welcome_test_btn">Test 3s Pop-Up</string>
+    <string name="settings_welcome_reset_btn">Reset Default</string>
+
+    <string name="settings_section_lockscreen">Custom Lock Screen</string>
+    <string name="settings_lockscreen_toggle">Enable SLauncher 6 Lock Screen</string>
+    <string name="settings_lockscreen_desc">Native Android lock activity (no floating overlay). Tip: set system screen lock to None in System Settings for seamless replacement.</string>
+    <string name="settings_lockscreen_preview_btn">Open Lock Screen Now</string>
+    <string name="settings_lockscreen_system_btn">System Security Settings</string>
+
+    <string name="settings_section_notifications">Dynamic Notifications</string>
+    <string name="settings_notif_toggle">Show Dynamic Notification pill</string>
+    <string name="settings_notif_status_granted">Notification access granted</string>
+    <string name="settings_notif_status_missing">Notification access required for live alerts</string>
+    <string name="settings_notif_grant_btn">Grant Notification Access</string>
+    <string name="settings_notif_test_btn">Test Dynamic Pop-Up</string>
+
+    <string name="settings_section_home">Home Screen &amp; Launcher</string>
+    <string name="settings_home_layout_label">Home apps view</string>
+    <string name="layout_grid">Compact Grid</string>
+    <string name="layout_list">Vertical List</string>
+    <string name="settings_app_icon_only_toggle">App icon opens Settings only</string>
+    <string name="settings_app_icon_only_desc">When SLauncher 6 is your default Home, tapping its icon opens Settings directly</string>
+    <string name="settings_set_default_home_btn">Set as Default Home Launcher</string>
+    <string name="settings_manage_favorites_btn">Customize Favorite Apps</string>
+
+    <!-- Lock Screen UI -->
+    <string name="lockscreen_swipe_unlock">Swipe up to unlock</string>
+    <string name="lockscreen_no_notifications">All caught up</string>
+
+    <!-- Weather & Location -->
+    <string name="perm_location_title">Location (Weather)</string>
+    <string name="perm_location_desc">Displays City, District and live local weather beside the clock</string>
+    <string name="weather_allow_location">Allow Location</string>
+    <string name="weather_loading">Updating…</string>
+    <string name="weather_unavailable">Tap to retry</string>
+    <string name="weather_sunny">Clear &amp; Sunny</string>
+    <string name="weather_partly_cloudy">Partly Cloudy</string>
+    <string name="weather_cloudy">Cloudy</string>
+    <string name="weather_drizzle">Drizzle</string>
+    <string name="weather_rain">Rain</string>
+    <string name="weather_thunderstorm">Thunderstorm</string>
+    <string name="cd_weather_icon">Current weather: %1$s</string>
+
+    <!-- Hide Apps -->
+    <string name="settings_hide_apps_btn">Hide Apps (%1$d hidden)</string>
+    <string name="hide_apps_dialog_title">Hide Apps</string>
+    <string name="hide_apps_dialog_subtitle">Select apps to hide from Home screen, App Drawer, and search</string>
+
+    <!-- Polished Notifications -->
+    <string name="lockscreen_notifications_header">Notifications (%1$d)</string>
+    <string name="lockscreen_swipe_hint">Swipe right to clear</string>
+    <string name="notif_time_minutes">%1$dm</string>
+    <string name="notif_time_hours">%1$dh</string>
+
+    <!-- Music Player & Lyrics -->
+    <string name="music_card_label">Music</string>
+    <string name="music_no_music">No Music Playing</string>
+    <string name="music_no_music_subtitle">Play a track on Spotify, YouTube Music, or any music app</string>
+    <string name="music_grant_access_hint">Tap to connect Spotify &amp; music players</string>
+    <string name="music_cd_previous">Previous track</string>
+    <string name="music_cd_play">Play</string>
+    <string name="music_cd_pause">Pause</string>
+    <string name="music_cd_next">Next track</string>
+    <string name="music_lyrics_button">Lyrics</string>
+    <string name="music_lyrics_expand">Expand lyrics</string>
+    <string name="music_lyrics_loading">Searching lyrics…</string>
+    <string name="music_lyrics_not_found">Lyrics unavailable for this song</string>
+    <string name="music_lyrics_empty_hint">Play a song to view live lyrics</string>
+    <string name="music_lyrics_synced_badge">Synced</string>
+    <string name="music_open_player">Open app</string>
+
+    <!-- System Quick Settings Integration -->
+    <string name="cd_quick_settings">Open system quick settings</string>
+    <string name="qs_on">On</string>
+    <string name="qs_off">Off</string>
+    <string name="qs_tile_tap_lock">Tap to lock</string>
+    <string name="qs_tile_lock_label">SLauncher Lock</string>
+    <string name="qs_tile_welcome_label">Pop-Up Hello</string>
+    <string name="qs_tile_dynamic_label">Dynamic Alert</string>
+    <string name="qs_tile_settings_label">SLauncher</string>
+    <string name="settings_section_system_qs">System Quick Settings</string>
+    <string name="settings_system_qs_desc">Swipe down on Home to pull Android\'s built-in Quick Settings. Add SLauncher 6 tiles directly to your system Quick Settings panel below:</string>
+    <string name="settings_system_qs_open_btn">Pull Down System Quick Settings</string>
+    <string name="qs_tile_add_btn">Add to System QS</string>
+    <string name="qs_tile_added_toast">Added to System Quick Settings</string>
+    <string name="qs_tile_already_toast">Already in System Quick Settings</string>
+    <string name="qs_tile_manual_hint">Open Quick Settings and tap the system Edit (pencil) button to drag SLauncher tiles</string>
+
+    <!-- Boot-Up Welcome Animation -->
+    <string name="settings_boot_welcome_toggle">Boot-Up Welcome Animation</string>
+    <string name="settings_boot_welcome_desc">Displays Minimalist Futuristic Pulse (2.2s) on device restart &amp; cold start</string>
+    <string name="boot_logo_mark">S6</string>
+    <string name="boot_brand_name">SLauncher 6</string>
+</resources>

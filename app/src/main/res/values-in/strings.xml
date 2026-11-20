@@ -1,0 +1,188 @@
+<resources>
+    <string name="app_name">SLauncher 6</string>
+    <string name="search_apps_hint">Cari aplikasi…</string>
+    <string name="cd_clear_search">Hapus pencarian</string>
+    <string name="cd_open_drawer">Buka laci semua aplikasi</string>
+    <string name="cd_close_drawer">Tutup laci aplikasi</string>
+    <string name="cd_customize_favorites">Atur aplikasi favorit</string>
+    <string name="cd_open_settings">Buka pengaturan launcher</string>
+    <string name="cd_lock_screen">Pratinjau layar kunci</string>
+    <string name="cd_app_icon">Ikon aplikasi %1$s</string>
+    <string name="cd_battery_indicator">Baterai %1$d persen</string>
+    <string name="cd_charging_indicator">Mengisi daya</string>
+    <string name="favorites_section_label">Favorit</string>
+    <string name="home_apps_section_label">Semua Aplikasi (%1$d)</string>
+    <string name="edit_favorites">Atur Favorit</string>
+    <string name="empty_favorites_title">Sematkan aplikasi penting Anda</string>
+    <string name="empty_favorites_subtitle">Ketuk Atur Favorit atau tekan lama aplikasi untuk menyematkan hingga 7 aplikasi.</string>
+    <string name="all_apps_title">Semua Aplikasi</string>
+    <string name="all_apps_count">%1$d aplikasi</string>
+    <string name="no_search_results">Tidak ada aplikasi \"%1$s\"</string>
+    <string name="loading_apps">Memuat aplikasi…</string>
+    <string name="favorites_dialog_title">Aplikasi Favorit</string>
+    <string name="favorites_dialog_subtitle">Pilih %1$d–%2$d aplikasi (%3$d/%2$d dipilih)</string>
+    <string name="favorites_limit_reached">Maksimal %1$d aplikasi favorit</string>
+    <string name="action_done">Selesai</string>
+    <string name="action_cancel">Batal</string>
+    <string name="action_pin">Sematkan</string>
+    <string name="action_unpin">Lepas</string>
+    <string name="action_app_info">Info aplikasi</string>
+    <string name="action_open">Buka</string>
+    <string name="action_dismiss">Tutup</string>
+    <string name="battery_charging_format">%1$d%% ⚡</string>
+    <string name="battery_format">%1$d%%</string>
+    <string name="launch_error">Tidak dapat membuka %1$s</string>
+    <string name="pinned_badge">Disematkan</string>
+    <string name="drawer_hint_long_press">Tekan lama aplikasi untuk sematkan atau info</string>
+
+    <!-- Welcome & Dynamic Notifications -->
+    <string name="default_welcome_message">Halo Selamat Datang</string>
+    <string name="dynamic_notif_now">Baru</string>
+    <string name="dynamic_notif_active_count">%1$d notifikasi</string>
+    <string name="dynamic_notif_grant_prompt">Ketuk untuk aktifkan Dynamic Notification</string>
+    <string name="dynamic_notif_test_title">Notifikasi Dinamis SLauncher 6</string>
+    <string name="dynamic_notif_test_body">Notifikasi langsung muncul halus di kapsul atas.</string>
+
+    <!-- Settings Screen -->
+    <string name="settings_title">Pengaturan SLauncher 6</string>
+    <string name="settings_subtitle">Atur layar utama, wallpaper, lock screen, dan izin</string>
+    <string name="settings_section_language">Bahasa Aplikasi</string>
+    <string name="lang_system">Ikuti Bahasa Perangkat</string>
+    <string name="lang_indonesian">Bahasa Indonesia</string>
+    <string name="lang_english">English</string>
+
+    <!-- Wallpaper Picker -->
+    <string name="settings_section_wallpaper">Pilihan Wallpaper</string>
+    <string name="wallpaper_system">Sistem Bawaan</string>
+    <string name="wallpaper_alpine_peaks">Pegunungan Salju</string>
+    <string name="wallpaper_ocean_shells">Pantai &amp; Kerang</string>
+    <string name="wallpaper_twilight_branches">Langit Senja</string>
+    <string name="wallpaper_sunlit_cedar">Pohon Cemara</string>
+    <string name="wallpaper_pastel_shore">Senja Pantai</string>
+    <string name="wallpaper_starry_pines">Malam Berbintang</string>
+    <string name="wallpaper_cobalt_oak">Ranting Kobalt</string>
+    <string name="wallpaper_tropical_palm">Pantai Tropis</string>
+    <string name="wallpaper_misty_forest">Hutan Berkabut</string>
+    <string name="wallpaper_add_photo">Tambah Foto</string>
+    <string name="wallpaper_custom_label">Foto Saya %1$d</string>
+    <string name="wallpaper_remove_custom_cd">Hapus foto kustom</string>
+    <string name="wallpaper_import_error">Gagal memuat foto yang dipilih</string>
+    <string name="wallpaper_apply_system">Terapkan ke Wallpaper Sistem</string>
+    <string name="wallpaper_applied_toast">Wallpaper diterapkan ke Beranda &amp; Layar Kunci sistem</string>
+    <string name="wallpaper_apply_error">Gagal menerapkan wallpaper sistem</string>
+
+    <!-- Permissions & Setup -->
+    <string name="permissions_title">Izin &amp; Pengaturan Awal</string>
+    <string name="permissions_subtitle">Aktifkan izin agar SLauncher 6 berjalan lancar</string>
+    <string name="perm_notifications_title">Izin Notifikasi</string>
+    <string name="perm_notifications_desc">Mengizinkan SLauncher 6 menampilkan status dan notifikasi dengan lancar</string>
+    <string name="perm_notif_listener_title">Akses Dynamic Notification</string>
+    <string name="perm_notif_listener_desc">Membaca notifikasi langsung untuk kapsul atas &amp; Lock Screen</string>
+    <string name="perm_default_home_title">Launcher Beranda Utama</string>
+    <string name="perm_default_home_desc">Menjaga SLauncher 6 tetap aktif saat menekan tombol Home</string>
+    <string name="perm_status_granted">Aktif</string>
+    <string name="perm_status_pending">Diperlukan</string>
+    <string name="perm_action_allow">Izinkan</string>
+    <string name="perm_action_setup">Atur</string>
+    <string name="perm_banner_button">Atur Izin</string>
+    <string name="perm_all_ready">Semua izin utama sudah aktif</string>
+
+    <string name="settings_section_welcome">Pop-Up Sambutan Dinamis</string>
+    <string name="settings_welcome_toggle">Tampilkan pop-up sambutan</string>
+    <string name="settings_welcome_desc">Muncul halus selama 3 detik lalu tertarik naik ke atas</string>
+    <string name="settings_welcome_input_label">Teks sambutan kustom</string>
+    <string name="settings_welcome_input_hint">Kosongkan untuk default: %1$s</string>
+    <string name="settings_welcome_test_btn">Uji Pop-Up 3 Detik</string>
+    <string name="settings_welcome_reset_btn">Reset Default</string>
+
+    <string name="settings_section_lockscreen">Layar Kunci (Lock Screen)</string>
+    <string name="settings_lockscreen_toggle">Aktifkan Lock Screen SLauncher 6</string>
+    <string name="settings_lockscreen_desc">Menggunakan aktivitas layar kunci bawaan Android (tanpa overlay). Tips: atur kunci layar sistem ke Tidak Ada di Pengaturan Sistem agar langsung terganti.</string>
+    <string name="settings_lockscreen_preview_btn">Buka Lock Screen Sekarang</string>
+    <string name="settings_lockscreen_system_btn">Pengaturan Keamanan Sistem</string>
+
+    <string name="settings_section_notifications">Dynamic Notification</string>
+    <string name="settings_notif_toggle">Tampilkan kapsul Dynamic Notification</string>
+    <string name="settings_notif_status_granted">Akses notifikasi aktif</string>
+    <string name="settings_notif_status_missing">Perlu izin akses notifikasi untuk notifikasi langsung</string>
+    <string name="settings_notif_grant_btn">Izinkan Akses Notifikasi</string>
+    <string name="settings_notif_test_btn">Uji Dynamic Pop-Up</string>
+
+    <string name="settings_section_home">Layar Utama &amp; Launcher</string>
+    <string name="settings_home_layout_label">Tampilan banyak aplikasi</string>
+    <string name="layout_grid">Kisi Padat (Grid)</string>
+    <string name="layout_list">Daftar Vertikal</string>
+    <string name="settings_app_icon_only_toggle">Ikon aplikasi hanya buka Pengaturan</string>
+    <string name="settings_app_icon_only_desc">Saat SLauncher 6 menjadi Beranda utama, membuka ikonnya langsung masuk ke Pengaturan</string>
+    <string name="settings_set_default_home_btn">Jadikan Launcher Utama</string>
+    <string name="settings_manage_favorites_btn">Atur Aplikasi Favorit</string>
+
+    <!-- Lock Screen UI -->
+    <string name="lockscreen_swipe_unlock">Geser ke atas untuk membuka</string>
+    <string name="lockscreen_no_notifications">Tidak ada notifikasi baru</string>
+
+    <!-- Weather & Location -->
+    <string name="perm_location_title">Lokasi (Cuaca)</string>
+    <string name="perm_location_desc">Menampilkan Kota, Kecamatan dan cuaca langsung di samping jam</string>
+    <string name="weather_allow_location">Aktifkan Lokasi</string>
+    <string name="weather_loading">Memuat cuaca…</string>
+    <string name="weather_unavailable">Ketuk untuk muat ulang</string>
+    <string name="weather_sunny">Terik</string>
+    <string name="weather_partly_cloudy">Cerah Berawan</string>
+    <string name="weather_cloudy">Mendung</string>
+    <string name="weather_drizzle">Gerimis</string>
+    <string name="weather_rain">Hujan</string>
+    <string name="weather_thunderstorm">Hujan Badai</string>
+    <string name="cd_weather_icon">Cuaca saat ini: %1$s</string>
+
+    <!-- Hide Apps -->
+    <string name="settings_hide_apps_btn">Sembunyikan Aplikasi (%1$d disembunyikan)</string>
+    <string name="hide_apps_dialog_title">Sembunyikan Aplikasi</string>
+    <string name="hide_apps_dialog_subtitle">Pilih aplikasi yang ingin disembunyikan dari Beranda, Laci Aplikasi, dan pencarian</string>
+
+    <!-- Polished Notifications -->
+    <string name="lockscreen_notifications_header">Notifikasi (%1$d)</string>
+    <string name="lockscreen_swipe_hint">Geser kanan untuk tutup</string>
+    <string name="notif_time_minutes">%1$dm</string>
+    <string name="notif_time_hours">%1$dj</string>
+
+    <!-- Music Player & Lyrics -->
+    <string name="music_card_label">Pemutar Musik</string>
+    <string name="music_no_music">Tidak Ada Musik</string>
+    <string name="music_no_music_subtitle">Putar lagu di Spotify, YouTube Music, atau aplikasi musik lainnya</string>
+    <string name="music_grant_access_hint">Ketuk untuk hubungkan Spotify &amp; aplikasi musik</string>
+    <string name="music_cd_previous">Lagu sebelumnya</string>
+    <string name="music_cd_play">Putar</string>
+    <string name="music_cd_pause">Jeda</string>
+    <string name="music_cd_next">Lagu selanjutnya</string>
+    <string name="music_lyrics_button">Lirik</string>
+    <string name="music_lyrics_expand">Perluas lirik</string>
+    <string name="music_lyrics_loading">Mencari lirik lagu…</string>
+    <string name="music_lyrics_not_found">Lirik belum tersedia untuk lagu ini</string>
+    <string name="music_lyrics_empty_hint">Putar lagu untuk menampilkan lirik</string>
+    <string name="music_lyrics_synced_badge">Tersinkron</string>
+    <string name="music_open_player">Buka aplikasi</string>
+
+    <!-- Integrasi Quick Settings Bawaan Sistem -->
+    <string name="cd_quick_settings">Buka quick settings bawaan sistem</string>
+    <string name="qs_on">Aktif</string>
+    <string name="qs_off">Mati</string>
+    <string name="qs_tile_tap_lock">Ketuk untuk kunci</string>
+    <string name="qs_tile_lock_label">Kunci SLauncher</string>
+    <string name="qs_tile_welcome_label">Pop-Up Hello</string>
+    <string name="qs_tile_dynamic_label">Dynamic Alert</string>
+    <string name="qs_tile_settings_label">SLauncher</string>
+    <string name="settings_section_system_qs">Quick Settings Bawaan Sistem</string>
+    <string name="settings_system_qs_desc">Geser ke bawah di Beranda untuk membuka Quick Settings bawaan Android. Tambahkan tile SLauncher 6 langsung ke Quick Settings sistem di bawah ini:</string>
+    <string name="settings_system_qs_open_btn">Tarik Quick Settings Sistem</string>
+    <string name="qs_tile_add_btn">Tambah ke Sistem</string>
+    <string name="qs_tile_added_toast">Ditambahkan ke Quick Settings sistem</string>
+    <string name="qs_tile_already_toast">Sudah ada di Quick Settings sistem</string>
+    <string name="qs_tile_manual_hint">Buka Quick Settings lalu ketuk ikon Edit (pensil) sistem untuk menambah tile SLauncher</string>
+
+    <!-- Boot-Up Welcome Animation -->
+    <string name="settings_boot_welcome_toggle">Animasi Boot-Up Welcome</string>
+    <string name="settings_boot_welcome_desc">Tampilkan Minimalist Futuristic Pulse (2,2 dtk) saat restart &amp; cold start</string>
+    <string name="boot_logo_mark">S6</string>
+    <string name="boot_brand_name">SLauncher 6</string>
+</resources>

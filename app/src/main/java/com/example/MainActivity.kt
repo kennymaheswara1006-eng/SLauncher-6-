@@ -1,0 +1,458 @@
+package com.example
+
+import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.graphics.Color as AndroidColor
+import android.os.Build
+import android.os.Bundle
+import android.service.quicksettings.TileService
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.AppModel
+import com.example.data.AppRepository
+import com.example.data.LocaleHelper
+import com.example.data.MusicRepository
+import com.example.data.WeatherRepository
+import com.example.notifications.DynamicNotificationItem
+import com.example.notifications.DynamicNotificationStore
+import com.example.quicksettings.SystemQuickSettingsHelper
+import com.example.ui.LauncherViewModel
+import com.example.ui.components.AppDrawerSheet
+import com.example.ui.components.BootWelcomeScreen
+import com.example.ui.components.HiddenAppsDialog
+import com.example.ui.components.HomeScreen
+import com.example.ui.components.MusicLyricsDialog
+import com.example.ui.components.PermissionsDialog
+import com.example.ui.components.SettingsScreen
+import com.example.ui.components.WallpaperBackdrop
+import com.example.ui.theme.SLauncher6Theme
+
+/**
+ * Entry point for SLauncher 6.
+ * Supports:
+ * - Wallpaper backdrop (3 curated photos or transparent system live wallpaper)
+ * - Guided runtime & system permissions setup (POST_NOTIFICATIONS, Notification Access, Default Home)
+ * - Dynamic localization following in-app Language setting
+ * - Dynamic 3-second Welcome Pop-Up & Live Dynamic Notifications
+ * - Full-screen Home app grid/list + A–Z App Drawer + Settings hub + Native Lock Screen
+ */
+class MainActivity : ComponentActivity() {
+
+  private val viewModel: LauncherViewModel by viewModels {
+    LauncherViewModel.Factory(
+      AppRepository(applicationContext),
+      WeatherRepository(applicationContext),
+      MusicRepository(applicationContext),
+    )
+  }
+
+  override fun onCreate(savedInstanceState: Bundle?) {
+    super.onCreate(savedInstanceState)
+
+    enableEdgeToEdge(
+      statusBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+      navigationBarStyle = SystemBarStyle.dark(AndroidColor.TRANSPARENT),
+    )
+
+    handleSettingsOnlyLaunchIntent(intent)
+    if (intent?.getBooleanExtra(BootReceiver.EXTRA_FROM_BOOT, false) == true) {
+      viewModel.onBootIntentReceived()
+    }
+    if (
+      intent?.action == TileService.ACTION_QS_TILE_PREFERENCES ||
+        intent?.getBooleanExtra(SystemQuickSettingsHelper.EXTRA_OPEN_SETTINGS, false) == true
+    ) {
+      viewModel.openSettings()
+    }
+
+    setContent {
+      val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+      val notifications by DynamicNotificationStore.notifications.collectAsStateWithLifecycle()
+      val unlockEventCount by DynamicNotificationStore.unlockEventCount.collectAsStateWithLifecycle()
+      val lifecycleOwner = LocalLifecycleOwner.current
+
+      val localizedContext =
+        remember(uiState.settings.language) {
+          LocaleHelper.localizedContext(this@MainActivity, uiState.settings.language)
+        }
+
+      val refreshAllPermissions = {
+        val postNotifGranted =
+          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(
+              applicationContext,
+              Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+          } else {
+            true
+          }
+        val locationGranted =
+          ContextCompat.checkSelfPermission(
+            applicationContext,
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+          ) == PackageManager.PERMISSION_GRANTED ||
+            ContextCompat.checkSelfPermission(
+              applicationContext,
+              Manifest.permission.ACCESS_FINE_LOCATION,
+            ) == PackageManager.PERMISSION_GRANTED
+        viewModel.refreshPermissionStatuses(
+          postNotificationsGranted = postNotifGranted,
+          notificationAccessGranted =
+            DynamicNotificationStore.isNotificationAccessGranted(applicationContext),
+          locationGranted = locationGranted,
+        )
+      }
+
+      val postNotificationsLauncher =
+        rememberLauncherForActivityResult(
+          contract = ActivityResultContracts.RequestPermission(),
+          onResult = { refreshAllPermissions() },
+        )
+
+      val locationPermissionLauncher =
+        rememberLauncherForActivityResult(
+          contract = ActivityResultContracts.RequestPermission(),
+          onResult = { granted ->
+            refreshAllPermissions()
+            if (granted) viewModel.refreshWeather(forceRefresh = true)
+          },
+        )
+
+      val requestPostNotificationsPermission: () -> Unit = {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+          postNotificationsLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+      }
+
+      val requestLocationPermission: () -> Unit = {
+        locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+      }
+
+      val wallpaperPickerLauncher =
+        rememberLauncherForActivityResult(
+          contract = ActivityResultContracts.PickVisualMedia(),
+          onResult = { uri ->
+            if (uri != null) {
+              viewModel.importCustomWallpaper(uri) { ok ->
+                if (!ok) {
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(R.string.wallpaper_import_error),
+                      Toast.LENGTH_SHORT,
+                    )
+                    .show()
+                }
+              }
+            }
+          },
+        )
+
+      DisposableEffect(lifecycleOwner) {
+        val packageReceiver =
+          object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+              viewModel.refreshApps()
+            }
+          }
+        val filter =
+          IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_CHANGED)
+            addDataScheme("package")
+          }
+        registerReceiver(packageReceiver, filter)
+
+        val observer = LifecycleEventObserver { _, event ->
+          if (event == Lifecycle.Event.ON_RESUME) {
+            refreshAllPermissions()
+            viewModel.onLauncherResumed()
+          }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        refreshAllPermissions()
+
+        onDispose {
+          lifecycleOwner.lifecycle.removeObserver(observer)
+          runCatching { unregisterReceiver(packageReceiver) }
+        }
+      }
+
+      LaunchedEffect(unlockEventCount) {
+        if (
+          unlockEventCount > 0L &&
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
+        ) {
+          viewModel.onLauncherResumed()
+        }
+      }
+
+      BackHandler(
+        enabled =
+          uiState.isPermissionsDialogOpen ||
+            uiState.musicState.isFullLyricsSheetOpen ||
+            uiState.isHiddenAppsDialogOpen ||
+            uiState.isSettingsOpen ||
+            uiState.isDrawerOpen ||
+            uiState.searchQuery.isNotEmpty()
+      ) {
+        when {
+          uiState.isPermissionsDialogOpen -> viewModel.closePermissionsDialog()
+          uiState.musicState.isFullLyricsSheetOpen -> viewModel.closeFullLyricsSheet()
+          uiState.isHiddenAppsDialogOpen -> viewModel.closeHiddenAppsDialog()
+          uiState.isSettingsOpen -> viewModel.closeSettings()
+          uiState.isDrawerOpen -> viewModel.closeDrawer()
+          uiState.searchQuery.isNotEmpty() -> viewModel.clearSearch()
+        }
+      }
+
+      val handleLaunchApp: (AppModel) -> Unit = { app ->
+        if (!viewModel.launchApp(app)) {
+          Toast.makeText(
+              localizedContext,
+              localizedContext.getString(R.string.launch_error, app.label),
+              Toast.LENGTH_SHORT,
+            )
+            .show()
+        }
+      }
+
+      val handleOpenNotification: (DynamicNotificationItem) -> Unit = { item ->
+        try {
+          item.contentIntent?.send()
+        } catch (_: Exception) {
+          // Ignore canceled PendingIntent
+        }
+      }
+
+      CompositionLocalProvider(LocalContext provides localizedContext) {
+        SLauncher6Theme {
+          Box(modifier = Modifier.fillMaxSize()) {
+            // Selected bundled/custom photo wallpaper or transparent system live wallpaper
+            WallpaperBackdrop(
+              wallpaperChoice = uiState.settings.wallpaperChoice,
+              customWallpaperPath = uiState.settings.selectedCustomWallpaperPath,
+            )
+
+            HomeScreen(
+              uiState = uiState,
+              notifications = notifications,
+              loadIcon = viewModel::loadIcon,
+              onLaunchApp = handleLaunchApp,
+              onOpenAppInfo = viewModel::openAppInfo,
+              onSearchQueryChange = viewModel::onSearchQueryChange,
+              onClearSearch = viewModel::clearSearch,
+              onOpenDrawer = viewModel::openDrawer,
+              onOpenQuickSettings = {
+                SystemQuickSettingsHelper.expandSystemQuickSettings(this@MainActivity)
+              },
+              onOpenSettings = viewModel::openSettings,
+              onPreviewLockScreen = { openLockScreen() },
+              onRequestLocationPermission = requestLocationPermission,
+              onRefreshWeather = { viewModel.refreshWeather(forceRefresh = true) },
+              onRequestNotificationAccess = {
+                DynamicNotificationStore.openNotificationAccessSettings(this@MainActivity)
+              },
+              onOpenNotification = handleOpenNotification,
+              onDismissNotification = { DynamicNotificationStore.remove(it.key) },
+              onMusicPlayPause = viewModel::toggleMusicPlayPause,
+              onMusicSkipPrevious = viewModel::skipMusicPrevious,
+              onMusicSkipNext = viewModel::skipMusicNext,
+              onMusicSeekTo = viewModel::seekMusicTo,
+              onOpenMusicPlayerApp = viewModel::openMusicPlayerApp,
+              onToggleInlineLyrics = viewModel::toggleInlineLyrics,
+              onOpenFullLyrics = viewModel::openFullLyricsSheet,
+            )
+
+            AppDrawerSheet(
+              visible = uiState.isDrawerOpen,
+              allApps = uiState.allApps,
+              alphabetIndexMap = uiState.alphabetIndexMap,
+              loadIcon = viewModel::loadIcon,
+              onAppClick = handleLaunchApp,
+              onOpenAppInfo = viewModel::openAppInfo,
+              onOpenSettings = viewModel::openSettings,
+              onClose = viewModel::closeDrawer,
+            )
+
+            SettingsScreen(
+              visible = uiState.isSettingsOpen,
+              settings = uiState.settings,
+              isPostNotificationsGranted = uiState.isPostNotificationsGranted,
+              isLocationGranted = uiState.isLocationGranted,
+              isNotificationAccessGranted = uiState.isNotificationAccessGranted,
+              isDefaultHome = uiState.isDefaultHome,
+              onSelectLanguage = viewModel::setLanguage,
+              onSelectWallpaper = viewModel::setWallpaperChoice,
+              onSelectCustomWallpaper = viewModel::selectCustomWallpaper,
+              onAddCustomWallpaper = {
+                wallpaperPickerLauncher.launch(
+                  PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+              },
+              onRemoveCustomWallpaper = viewModel::removeCustomWallpaper,
+              onApplySystemWallpaper = { choice, customPath ->
+                viewModel.applyWallpaperToSystem(choice, customPath) { ok ->
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(
+                        if (ok) R.string.wallpaper_applied_toast else R.string.wallpaper_apply_error
+                      ),
+                      Toast.LENGTH_SHORT,
+                    )
+                    .show()
+                }
+              },
+              onSelectHomeLayout = viewModel::setHomeAppsLayout,
+              onToggleWelcomePopup = viewModel::setWelcomePopupEnabled,
+              onWelcomeTextChange = viewModel::setCustomWelcomeText,
+              onTestWelcomePopup = {
+                viewModel.closeSettings()
+                viewModel.triggerWelcomePopup()
+              },
+              onToggleLockScreen = { enabled ->
+                viewModel.setLockScreenEnabled(enabled)
+                (application as? SLauncherApp)?.syncLockScreenReceiver()
+              },
+              onPreviewLockScreen = { openLockScreen() },
+              onOpenSecuritySettings = viewModel::openSystemSecuritySettings,
+              onToggleDynamicNotifications = viewModel::setDynamicNotificationsEnabled,
+              onRequestNotificationAccess = {
+                DynamicNotificationStore.openNotificationAccessSettings(this@MainActivity)
+              },
+              onTestDynamicNotification = {
+                DynamicNotificationStore.triggerPreviewNotification(
+                  title = localizedContext.getString(R.string.dynamic_notif_test_title),
+                  body = localizedContext.getString(R.string.dynamic_notif_test_body),
+                  appName = localizedContext.getString(R.string.app_name),
+                )
+              },
+              onToggleAppIconSettingsOnly = viewModel::setAppIconOpensSettingsOnly,
+              onToggleBootWelcome = viewModel::setBootWelcomeEnabled,
+              onOpenHiddenAppsEditor = viewModel::openHiddenAppsDialog,
+              onOpenPermissionsDialog = viewModel::openPermissionsDialog,
+              onSetDefaultHome = viewModel::openDefaultHomeSettings,
+              onClose = viewModel::closeSettings,
+            )
+
+            if (uiState.musicState.isFullLyricsSheetOpen) {
+              MusicLyricsDialog(
+                musicState = uiState.musicState,
+                onPlayPause = viewModel::toggleMusicPlayPause,
+                onSkipPrevious = viewModel::skipMusicPrevious,
+                onSkipNext = viewModel::skipMusicNext,
+                onSeekTo = viewModel::seekMusicTo,
+                onDismiss = viewModel::closeFullLyricsSheet,
+              )
+            }
+
+            if (uiState.isHiddenAppsDialogOpen) {
+              HiddenAppsDialog(
+                allInstalledApps = uiState.allInstalledApps,
+                currentlyHiddenKeys = uiState.settings.hiddenComponentKeys,
+                loadIcon = viewModel::loadIcon,
+                onDismiss = viewModel::closeHiddenAppsDialog,
+                onSaveSelection = viewModel::saveHiddenAppsSelection,
+              )
+            }
+
+            if (uiState.isPermissionsDialogOpen) {
+              PermissionsDialog(
+                isPostNotificationsGranted = uiState.isPostNotificationsGranted,
+                isLocationGranted = uiState.isLocationGranted,
+                isNotificationAccessGranted = uiState.isNotificationAccessGranted,
+                isDefaultHome = uiState.isDefaultHome,
+                onRequestPostNotifications = requestPostNotificationsPermission,
+                onRequestLocation = requestLocationPermission,
+                onRequestNotificationAccess = {
+                  DynamicNotificationStore.openNotificationAccessSettings(this@MainActivity)
+                },
+                onRequestDefaultHome = viewModel::openDefaultHomeSettings,
+                onDismiss = { viewModel.closePermissionsDialog(markPromptShown = true) },
+              )
+            }
+
+            if (uiState.isBootWelcomeVisible) {
+              BootWelcomeScreen(
+                onAnimationFinished = viewModel::dismissBootWelcome,
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+
+  override fun onNewIntent(intent: Intent) {
+    super.onNewIntent(intent)
+    setIntent(intent)
+    if (intent.getBooleanExtra(BootReceiver.EXTRA_FROM_BOOT, false)) {
+      viewModel.onBootIntentReceived()
+      return
+    }
+    if (
+      intent.action == TileService.ACTION_QS_TILE_PREFERENCES ||
+        intent.getBooleanExtra(SystemQuickSettingsHelper.EXTRA_OPEN_SETTINGS, false)
+    ) {
+      viewModel.openSettings()
+      return
+    }
+    if (handleSettingsOnlyLaunchIntent(intent)) return
+
+    if (Intent.ACTION_MAIN == intent.action) {
+      viewModel.closePermissionsDialog(markPromptShown = true)
+      viewModel.closeHiddenAppsDialog()
+      viewModel.closeFullLyricsSheet()
+      viewModel.closeSettings()
+      viewModel.closeDrawer()
+      viewModel.clearSearch()
+      viewModel.onLauncherResumed()
+    }
+  }
+
+  private fun handleSettingsOnlyLaunchIntent(launchIntent: Intent?): Boolean {
+    val state = viewModel.uiState.value
+    val launchedFromIcon =
+      launchIntent?.hasCategory(Intent.CATEGORY_LAUNCHER) == true &&
+        launchIntent.hasCategory(Intent.CATEGORY_HOME) == false
+    if (state.isDefaultHome && state.settings.appIconOpensSettingsOnly && launchedFromIcon) {
+      viewModel.openSettings()
+      return true
+    }
+    return false
+  }
+
+  private fun openLockScreen() {
+    val lockIntent =
+      Intent(this, LockScreenActivity::class.java).apply {
+        addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+      }
+    startActivity(lockIntent)
+  }
+}

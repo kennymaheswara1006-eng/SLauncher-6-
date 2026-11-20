@@ -1,0 +1,6 @@
+{
+  "name": "SLauncher 6",
+  "description": "Lightweight, one-handed Android launcher with Dark Glass ambient aesthetics, instant thumb search, and A-Z app drawer.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

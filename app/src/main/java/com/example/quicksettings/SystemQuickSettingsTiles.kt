@@ -71,6 +71,7 @@ object SystemQuickSettingsHelper {
   }
 }
 
+@SuppressLint("StartActivityAndCollapseDeprecated")
 private fun TileService.launchActivityCollapsed(intent: Intent) {
   intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
   if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {

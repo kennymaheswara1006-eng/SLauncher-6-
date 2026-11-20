@@ -222,6 +222,7 @@ fun SearchBar(
           Modifier.minimumInteractiveComponentSize()
             .clip(CircleShape)
             .background(SLauncherColors.AccentContainer)
+            .border(1.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.42f), CircleShape)
             .testTag("open_drawer_button"),
       ) {
         Icon(

@@ -185,4 +185,5 @@
     <string name="settings_boot_welcome_desc">Tampilkan Minimalist Futuristic Pulse (2,2 dtk) saat restart &amp; cold start</string>
     <string name="boot_logo_mark">S6</string>
     <string name="boot_brand_name">SLauncher 6</string>
+    <string name="home_set_default_pill">Jadikan Beranda</string>
 </resources>

@@ -224,6 +224,13 @@ class AppRepository(context: Context) {
     return pending
   }
 
+  fun getSyncedSystemWallpaperKey(): String? =
+    prefs.getString(KEY_SYNCED_SYSTEM_WALLPAPER, null)
+
+  fun setSyncedSystemWallpaperKey(key: String) {
+    prefs.edit().putString(KEY_SYNCED_SYSTEM_WALLPAPER, key).apply()
+  }
+
   /**
    * Imports a user-chosen photo from Android Photo Picker into app-private storage,
    * downscaled cleanly to <= 1600px on the longest edge so 2GB RAM devices never OOM.
@@ -484,6 +491,7 @@ class AppRepository(context: Context) {
     private const val KEY_PENDING_BOOT_WELCOME = "pref_pending_boot_welcome"
     private const val KEY_PERMISSIONS_PROMPT_SHOWN = "pref_permissions_prompt_shown"
     private const val KEY_HIDDEN_COMPONENTS = "pref_hidden_components"
+    private const val KEY_SYNCED_SYSTEM_WALLPAPER = "pref_synced_system_wallpaper"
 
     private const val DELIMITER = "|"
     private const val DEFAULT_ICON_PX = 108

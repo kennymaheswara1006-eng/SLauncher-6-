@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Wallpaper-transparent theme preserving crisp system wallpaper and transparent system bars -->
-    <style name="Theme.SLauncher6" parent="android:Theme.Wallpaper.NoTitleBar.Fullscreen">
-        <item name="android:windowShowWallpaper">true</item>
-        <item name="android:windowBackground">@android:color/transparent</item>
-        <item name="android:colorBackgroundCacheHint">@null</item>
+    <!-- Opaque dark glass window default prevents old system wallpaper bleed in Recents; SYSTEM live wallpaper enables FLAG_SHOW_WALLPAPER dynamically -->
+    <style name="Theme.SLauncher6" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowShowWallpaper">false</item>
+        <item name="android:windowBackground">@color/slauncher_bg_dark</item>
         <item name="android:windowFullscreen">false</item>
         <item name="android:windowDrawsSystemBarBackgrounds">true</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

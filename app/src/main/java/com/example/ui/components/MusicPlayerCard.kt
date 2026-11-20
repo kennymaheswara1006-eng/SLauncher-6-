@@ -56,6 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -139,6 +141,17 @@ fun MusicPlayerCard(
         .fillMaxWidth()
         .clip(cardShape)
         .background(cardBackground)
+        .drawBehind {
+          val auraAlpha = if (track != null) 0.24f else 0.14f
+          drawCircle(
+            brush =
+              Brush.radialGradient(
+                colors = listOf(SLauncherColors.AccentPrimary.copy(alpha = auraAlpha), Color.Transparent),
+                center = Offset(size.width * 0.2f, size.height * 0.35f),
+                radius = size.width * 0.65f,
+              ),
+          )
+        }
         .border(1.dp, SLauncherColors.GlassBorderGradient, cardShape)
         .padding(horizontal = 16.dp, vertical = 14.dp)
         .testTag("music_player_card"),
@@ -238,17 +251,27 @@ fun MusicPlayerCard(
         Box(
           contentAlignment = Alignment.Center,
           modifier =
-            Modifier.size(56.dp)
+            Modifier.size(60.dp)
               .clip(CircleShape)
-              .background(SLauncherColors.AccentContainer)
-              .border(1.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.35f), CircleShape),
+              .background(Color.White.copy(alpha = 0.04f))
+              .border(1.dp, SLauncherColors.GlassBorder, CircleShape)
+              .padding(5.dp),
         ) {
-          Icon(
-            imageVector = Icons.Rounded.Album,
-            contentDescription = null,
-            tint = SLauncherColors.AccentPrimary,
-            modifier = Modifier.size(30.dp),
-          )
+          Box(
+            contentAlignment = Alignment.Center,
+            modifier =
+              Modifier.fillMaxSize()
+                .clip(CircleShape)
+                .background(SLauncherColors.AccentContainer)
+                .border(1.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.45f), CircleShape),
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Album,
+              contentDescription = null,
+              tint = SLauncherColors.AccentPrimary,
+              modifier = Modifier.size(28.dp),
+            )
+          }
         }
 
         Spacer(modifier = Modifier.height(10.dp))
@@ -485,12 +508,15 @@ fun MusicTransportControlsRow(
       )
     }
 
-    // Centered signature Play / Pause button
+    // Centered signature Play / Pause button with subtle luminous halo
     IconButton(
       onClick = onPlayPause,
       modifier =
         Modifier.minimumInteractiveComponentSize()
-          .size(56.dp)
+          .size(58.dp)
+          .clip(CircleShape)
+          .border(2.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.38f), CircleShape)
+          .padding(2.dp)
           .clip(CircleShape)
           .background(SLauncherColors.TextPrimary)
           .testTag("music_play_pause_button"),

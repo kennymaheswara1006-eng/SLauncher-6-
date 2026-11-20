@@ -4,6 +4,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +31,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Tune
@@ -104,6 +106,7 @@ fun HomeScreen(
   onOpenMusicPlayerApp: (String) -> Unit,
   onToggleInlineLyrics: () -> Unit,
   onOpenFullLyrics: () -> Unit,
+  onSetDefaultHome: () -> Unit = {},
   modifier: Modifier = Modifier,
 ) {
   var dragAccumulator by remember { mutableFloatStateOf(0f) }
@@ -114,10 +117,10 @@ fun HomeScreen(
 
   val ambientScrim =
     Brush.verticalGradient(
-      0.0f to Color.Black.copy(alpha = 0.24f),
-      0.24f to Color.Black.copy(alpha = 0.06f),
-      0.76f to Color.Black.copy(alpha = 0.10f),
-      1.0f to Color.Black.copy(alpha = 0.34f),
+      0.0f to Color(0x4A060911),
+      0.24f to Color(0x14060911),
+      0.72f to Color(0x1E060911),
+      1.0f to Color(0x61060911),
     )
 
   Box(
@@ -165,69 +168,122 @@ fun HomeScreen(
         modifier = Modifier.padding(top = 8.dp),
       )
 
-      // 2. Top-Right Utility Row: Quick Settings + Lock Screen + SLauncher 6 Logo Settings
+      // 2. Balanced Top Bar: Brand / Default Home Pill (left) + Quick Settings, Lock & Logo Settings (right)
       Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
+        horizontalArrangement = Arrangement.SpaceBetween,
         modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
       ) {
-        IconButton(
-          onClick = onOpenQuickSettings,
-          modifier =
-            Modifier.minimumInteractiveComponentSize()
-              .size(40.dp)
-              .clip(CircleShape)
-              .background(SLauncherColors.GlassSurfaceGradient)
-              .border(1.dp, SLauncherColors.GlassBorderGradient, CircleShape)
-              .testTag("home_quick_settings_button"),
-        ) {
-          Icon(
-            imageVector = Icons.Rounded.Tune,
-            contentDescription = stringResource(R.string.cd_quick_settings),
-            tint = SLauncherColors.TextPrimary,
-            modifier = Modifier.size(18.dp),
-          )
+        if (!uiState.isDefaultHome) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+              Modifier.minimumInteractiveComponentSize()
+                .clip(RoundedCornerShape(50))
+                .background(SLauncherColors.GlassFloatingCardGradient)
+                .border(1.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.55f), RoundedCornerShape(50))
+                .clickable { onSetDefaultHome() }
+                .padding(horizontal = 12.dp, vertical = 7.dp)
+                .testTag("home_set_default_pill"),
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Home,
+              contentDescription = null,
+              tint = SLauncherColors.AccentPrimary,
+              modifier = Modifier.size(14.dp),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = stringResource(R.string.home_set_default_pill),
+              style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+              color = SLauncherColors.TextPrimary,
+              maxLines = 1,
+            )
+          }
+        } else {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+              Modifier.clip(RoundedCornerShape(50))
+                .background(SLauncherColors.DarkGlassPill)
+                .border(0.8.dp, SLauncherColors.GlassBorder, RoundedCornerShape(50))
+                .padding(horizontal = 11.dp, vertical = 6.dp),
+          ) {
+            Box(
+              modifier =
+                Modifier.size(7.dp)
+                  .clip(CircleShape)
+                  .background(SLauncherColors.AccentPrimary),
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+              text = stringResource(R.string.app_name),
+              style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 0.6.sp),
+              color = SLauncherColors.TextSecondary,
+              maxLines = 1,
+            )
+          }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          IconButton(
+            onClick = onOpenQuickSettings,
+            modifier =
+              Modifier.minimumInteractiveComponentSize()
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(SLauncherColors.GlassSurfaceGradient)
+                .border(1.dp, SLauncherColors.GlassBorderGradient, CircleShape)
+                .testTag("home_quick_settings_button"),
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Tune,
+              contentDescription = stringResource(R.string.cd_quick_settings),
+              tint = SLauncherColors.TextPrimary,
+              modifier = Modifier.size(18.dp),
+            )
+          }
 
-        IconButton(
-          onClick = onPreviewLockScreen,
-          modifier =
-            Modifier.minimumInteractiveComponentSize()
-              .size(40.dp)
-              .clip(CircleShape)
-              .background(SLauncherColors.GlassSurfaceGradient)
-              .border(1.dp, SLauncherColors.GlassBorderGradient, CircleShape)
-              .testTag("home_lockscreen_button"),
-        ) {
-          Icon(
-            imageVector = Icons.Rounded.Lock,
-            contentDescription = stringResource(R.string.cd_lock_screen),
-            tint = SLauncherColors.TextPrimary,
-            modifier = Modifier.size(18.dp),
-          )
-        }
+          Spacer(modifier = Modifier.width(8.dp))
 
-        Spacer(modifier = Modifier.width(8.dp))
+          IconButton(
+            onClick = onPreviewLockScreen,
+            modifier =
+              Modifier.minimumInteractiveComponentSize()
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(SLauncherColors.GlassSurfaceGradient)
+                .border(1.dp, SLauncherColors.GlassBorderGradient, CircleShape)
+                .testTag("home_lockscreen_button"),
+          ) {
+            Icon(
+              imageVector = Icons.Rounded.Lock,
+              contentDescription = stringResource(R.string.cd_lock_screen),
+              tint = SLauncherColors.TextPrimary,
+              modifier = Modifier.size(18.dp),
+            )
+          }
 
-        // SLauncher 6 Logo Button for Launcher Settings
-        IconButton(
-          onClick = onOpenSettings,
-          modifier =
-            Modifier.minimumInteractiveComponentSize()
-              .size(42.dp)
-              .clip(CircleShape)
-              .background(SLauncherColors.GlassFloatingCardGradient)
-              .border(1.2.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.65f), CircleShape)
-              .testTag("home_settings_button"),
-        ) {
-          Image(
-            painter = painterResource(id = R.drawable.slauncher_icon_fg_1795168930289),
-            contentDescription = stringResource(R.string.cd_open_settings),
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.size(30.dp).clip(CircleShape),
-          )
+          Spacer(modifier = Modifier.width(8.dp))
+
+          // SLauncher 6 Logo Button for Launcher Settings
+          IconButton(
+            onClick = onOpenSettings,
+            modifier =
+              Modifier.minimumInteractiveComponentSize()
+                .size(42.dp)
+                .clip(CircleShape)
+                .background(SLauncherColors.GlassFloatingCardGradient)
+                .border(1.2.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.7f), CircleShape)
+                .testTag("home_settings_button"),
+          ) {
+            Image(
+              painter = painterResource(id = R.drawable.slauncher_icon_fg_1795168930289),
+              contentDescription = stringResource(R.string.cd_open_settings),
+              contentScale = ContentScale.Crop,
+              modifier = Modifier.size(30.dp).clip(CircleShape),
+            )
+          }
         }
       }
 
@@ -282,18 +338,34 @@ fun HomeScreen(
             }
           }
         } else {
-          // All Apps on Home Section Header
+          // All Apps on Home Section Header with sleek hairline
           item(span = { GridItemSpan(maxLineSpan) }, contentType = "all_apps_header") {
-            Text(
-              text = stringResource(R.string.home_apps_section_label, uiState.allApps.size).uppercase(),
-              style =
-                MaterialTheme.typography.labelSmall.copy(
-                  letterSpacing = 1.2.sp,
-                  shadow = WallpaperLegibilityShadow,
-                ),
-              color = SLauncherColors.TextSecondary,
-              modifier = Modifier.padding(top = 6.dp, bottom = 2.dp, start = 4.dp),
-            )
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp, start = 4.dp, end = 4.dp),
+            ) {
+              Text(
+                text = stringResource(R.string.home_apps_section_label, uiState.allApps.size).uppercase(),
+                style =
+                  MaterialTheme.typography.labelSmall.copy(
+                    letterSpacing = 1.2.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    shadow = WallpaperLegibilityShadow,
+                  ),
+                color = SLauncherColors.TextSecondary,
+              )
+              Spacer(modifier = Modifier.width(10.dp))
+              Box(
+                modifier =
+                  Modifier.weight(1f)
+                    .height(0.8.dp)
+                    .background(
+                      Brush.horizontalGradient(
+                        listOf(SLauncherColors.GlassBorderStrong, Color.Transparent)
+                      )
+                    ),
+              )
+            }
           }
 
           // Many Apps displayed directly on the Home Screen (Glassmorphic Grid or Vertical List)
@@ -374,8 +446,12 @@ private fun HomeAppGridTile(
       modifier =
         Modifier.fillMaxWidth()
           .clip(tileShape)
-          .background(Color.White.copy(alpha = 0.05f))
-          .border(0.6.dp, Color.White.copy(alpha = 0.12f), tileShape)
+          .background(
+            Brush.verticalGradient(
+              listOf(Color.White.copy(alpha = 0.085f), Color.White.copy(alpha = 0.03f))
+            )
+          )
+          .border(0.8.dp, SLauncherColors.GlassBorderGradient, tileShape)
           .combinedClickable(
             onClick = onLaunch,
             onLongClick = { menuExpanded = true },

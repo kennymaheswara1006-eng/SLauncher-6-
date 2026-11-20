@@ -43,13 +43,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -109,6 +114,22 @@ fun DynamicPopUpCapsule(
   modifier: Modifier = Modifier,
 ) {
   val context = LocalContext.current
+  val lifecycleOwner = LocalLifecycleOwner.current
+  var isResumed by remember(lifecycleOwner) {
+    mutableStateOf(lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+  }
+  DisposableEffect(lifecycleOwner) {
+    val observer = LifecycleEventObserver { _, event ->
+      when (event) {
+        Lifecycle.Event.ON_RESUME -> isResumed = true
+        Lifecycle.Event.ON_PAUSE -> isResumed = false
+        else -> Unit
+      }
+    }
+    lifecycleOwner.lifecycle.addObserver(observer)
+    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+  }
+
   var showWelcomeBanner by remember { mutableStateOf(false) }
   val welcomeDropletProgress = remember { Animatable(0f) }
   var isNotifExpanded by remember { mutableStateOf(false) }
@@ -225,28 +246,31 @@ fun DynamicPopUpCapsule(
         val swipeOffsetX = remember(latestNotification.key) { Animatable(0f) }
         val notifExitProgress = remember(latestNotification.key) { Animatable(0f) }
         val timerRemaining = remember(latestNotification.key) { Animatable(1f) }
+        var remainingDurationMs by remember(latestNotification.key) { mutableLongStateOf(3000L) }
 
-        // Auto-dismiss each notification one-by-one after 3 seconds cleanly (no small circle morph)
-        LaunchedEffect(latestNotification.key, isNotifExpanded) {
-          if (!isNotifExpanded) {
+        // Auto-dismiss 1-by-1 after 3s of visible resumed time (pauses cleanly when Recents is open)
+        LaunchedEffect(latestNotification.key, isNotifExpanded, isResumed) {
+          if (!isNotifExpanded && isResumed) {
             notifExitProgress.snapTo(0f)
-            timerRemaining.snapTo(1f)
-            coroutineScope {
-              val countdownJob = launch {
-                timerRemaining.animateTo(
-                  targetValue = 0f,
-                  animationSpec = tween(durationMillis = 3000, easing = LinearEasing),
-                )
-              }
-              countdownJob.join()
+            val durationMs = remainingDurationMs.coerceIn(350L, 3000L).toInt()
+            val startAt = System.currentTimeMillis()
+            try {
+              timerRemaining.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = durationMs, easing = LinearEasing),
+              )
+              remainingDurationMs = 0L
+              notifExitProgress.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
+              )
+              isNotifExpanded = false
+              onDismissNotification(latestNotification)
+            } finally {
+              val elapsed = (System.currentTimeMillis() - startAt).coerceAtLeast(0L)
+              remainingDurationMs = (remainingDurationMs - elapsed).coerceAtLeast(0L)
             }
-            notifExitProgress.animateTo(
-              targetValue = 1f,
-              animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing),
-            )
-            isNotifExpanded = false
-            onDismissNotification(latestNotification)
-          } else {
+          } else if (isNotifExpanded) {
             timerRemaining.snapTo(0f)
           }
         }

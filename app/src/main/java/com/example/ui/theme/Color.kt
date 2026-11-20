@@ -17,34 +17,35 @@ object SLauncherColors {
   // Top-lit Glassmorphism gradient fills & borders
   val GlassSurfaceGradient =
     Brush.verticalGradient(
-      colors = listOf(Color(0xC91C2334), Color(0xB3101521))
+      colors = listOf(Color(0xD41F293D), Color(0xBD101624))
     )
   val GlassFloatingCardGradient =
     Brush.verticalGradient(
-      colors = listOf(Color(0xCC1E2638), Color(0xB5111622))
+      colors = listOf(Color(0xD9232E45), Color(0xBF101625))
     )
   val GlassBorderGradient =
     Brush.verticalGradient(
-      colors = listOf(Color(0x52FFFFFF), Color(0x16FFFFFF))
+      colors = listOf(Color(0x66FFFFFF), Color(0x1E64B5F6), Color(0x14FFFFFF))
     )
 
   // Hairline borders & subtle dividers
-  val GlassBorder = Color(0x2EFFFFFF)
-  val GlassBorderStrong = Color(0x4DFFFFFF)
-  val GlassDivider = Color(0x1CFFFFFF)
+  val GlassBorder = Color(0x33FFFFFF)
+  val GlassBorderStrong = Color(0x57FFFFFF)
+  val GlassDivider = Color(0x1FFFFFFF)
 
   // Crisp typography over wallpaper & glass
-  val TextPrimary = Color(0xFFF5F7FA)
-  val TextSecondary = Color(0xFFBAC5D6)
-  val TextMuted = Color(0xFF8894A8)
-  val WallpaperTextShadow = Color(0xBD000000)
+  val TextPrimary = Color(0xFFF6F8FC)
+  val TextSecondary = Color(0xFFC2CDDF)
+  val TextMuted = Color(0xFF8C9AB0)
+  val WallpaperTextShadow = Color(0xCC000000)
 
   // Luminous sky-cyan accent matching the SLauncher 6 brand emblem
   val AccentPrimary = Color(0xFF64B5F6)
-  val AccentContainer = Color(0x3664B5F6)
+  val AccentGlow = Color(0xFF38BDF8)
+  val AccentContainer = Color(0x3B64B5F6)
   val BatteryCharging = Color(0xFF6EE7B7)
   val WarningSoft = Color(0xFFFBBF24)
-  val PlaceholderIconBg = Color(0x26FFFFFF)
+  val PlaceholderIconBg = Color(0x28FFFFFF)
 
   // Expressive Weather icon palette
   val SunAmber = Color(0xFFFBBF24)

@@ -7,9 +7,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Color as AndroidColor
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.service.quicksettings.TileService
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -38,6 +40,7 @@ import com.example.data.AppModel
 import com.example.data.AppRepository
 import com.example.data.LocaleHelper
 import com.example.data.MusicRepository
+import com.example.data.WallpaperChoice
 import com.example.data.WeatherRepository
 import com.example.notifications.DynamicNotificationItem
 import com.example.notifications.DynamicNotificationStore
@@ -213,22 +216,27 @@ class MainActivity : ComponentActivity() {
         }
       }
 
-      BackHandler(
-        enabled =
-          uiState.isPermissionsDialogOpen ||
-            uiState.musicState.isFullLyricsSheetOpen ||
-            uiState.isHiddenAppsDialogOpen ||
-            uiState.isSettingsOpen ||
-            uiState.isDrawerOpen ||
-            uiState.searchQuery.isNotEmpty()
-      ) {
+      LaunchedEffect(uiState.settings.wallpaperChoice) {
+        if (uiState.settings.wallpaperChoice == WallpaperChoice.SYSTEM) {
+          window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+          window.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
+        } else {
+          window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+          window.setBackgroundDrawable(ColorDrawable(AndroidColor.parseColor("#090C14")))
+        }
+      }
+
+      // Always intercept Back on the Home Launcher so pressing Back never exits to the stock launcher
+      BackHandler(enabled = true) {
         when {
+          uiState.isBootWelcomeVisible -> Unit
           uiState.isPermissionsDialogOpen -> viewModel.closePermissionsDialog()
           uiState.musicState.isFullLyricsSheetOpen -> viewModel.closeFullLyricsSheet()
           uiState.isHiddenAppsDialogOpen -> viewModel.closeHiddenAppsDialog()
           uiState.isSettingsOpen -> viewModel.closeSettings()
           uiState.isDrawerOpen -> viewModel.closeDrawer()
           uiState.searchQuery.isNotEmpty() -> viewModel.clearSearch()
+          uiState.musicState.isLyricsExpandedInline -> viewModel.toggleInlineLyrics()
         }
       }
 
@@ -288,6 +296,7 @@ class MainActivity : ComponentActivity() {
               onOpenMusicPlayerApp = viewModel::openMusicPlayerApp,
               onToggleInlineLyrics = viewModel::toggleInlineLyrics,
               onOpenFullLyrics = viewModel::openFullLyricsSheet,
+              onSetDefaultHome = viewModel::openDefaultHomeSettings,
             )
 
             AppDrawerSheet(

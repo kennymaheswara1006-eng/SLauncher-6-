@@ -74,6 +74,26 @@ class LauncherViewModel(
     refreshApps()
     refreshWeather(forceRefresh = false)
     observeMusicSessions()
+    syncSelectedWallpaperIfNeeded(force = false)
+  }
+
+  private fun syncSelectedWallpaperIfNeeded(force: Boolean) {
+    val settings = _uiState.value.settings
+    if (settings.wallpaperChoice == WallpaperChoice.SYSTEM) return
+    val syncKey =
+      if (settings.wallpaperChoice == WallpaperChoice.CUSTOM) {
+        "custom:${settings.selectedCustomWallpaperPath.orEmpty()}"
+      } else {
+        "bundled:${settings.wallpaperChoice.key}"
+      }
+    if (!force && repository.getSyncedSystemWallpaperKey() == syncKey) return
+
+    viewModelScope.launch {
+      val ok = repository.applySystemWallpaper(settings.wallpaperChoice, settings.selectedCustomWallpaperPath)
+      if (ok) {
+        repository.setSyncedSystemWallpaperKey(syncKey)
+      }
+    }
   }
 
   private fun observeMusicSessions() {
@@ -344,6 +364,9 @@ class LauncherViewModel(
 
   fun setWallpaperChoice(choice: WallpaperChoice) {
     updateSettings { it.copy(wallpaperChoice = choice) }
+    if (choice != WallpaperChoice.SYSTEM) {
+      syncSelectedWallpaperIfNeeded(force = true)
+    }
   }
 
   fun selectCustomWallpaper(path: String) {
@@ -353,6 +376,7 @@ class LauncherViewModel(
         selectedCustomWallpaperPath = path,
       )
     }
+    syncSelectedWallpaperIfNeeded(force = true)
   }
 
   fun importCustomWallpaper(uri: Uri, onResult: (Boolean) -> Unit) {
@@ -367,6 +391,7 @@ class LauncherViewModel(
             selectedCustomWallpaperPath = savedPath,
           )
         }
+        syncSelectedWallpaperIfNeeded(force = true)
         onResult(true)
       } else {
         onResult(false)

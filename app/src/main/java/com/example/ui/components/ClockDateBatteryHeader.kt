@@ -39,9 +39,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -276,6 +278,16 @@ private fun WeatherLocationBadge(
     modifier =
       Modifier.clip(cardShape)
         .background(SLauncherColors.GlassFloatingCardGradient)
+        .drawBehind {
+          drawCircle(
+            brush =
+              Brush.radialGradient(
+                colors = listOf(SLauncherColors.AccentPrimary.copy(alpha = 0.18f), Color.Transparent),
+                center = Offset(size.width * 0.25f, size.height * 0.6f),
+                radius = size.maxDimension * 0.7f,
+              ),
+          )
+        }
         .border(1.dp, SLauncherColors.GlassBorderGradient, cardShape)
         .clickable {
           when (weatherState) {
@@ -283,7 +295,7 @@ private fun WeatherLocationBadge(
             else -> onRefreshWeather()
           }
         }
-        .padding(horizontal = 14.dp, vertical = 10.dp)
+        .padding(horizontal = 14.dp, vertical = 11.dp)
         .testTag("weather_location_widget"),
   ) {
     when (weatherState) {

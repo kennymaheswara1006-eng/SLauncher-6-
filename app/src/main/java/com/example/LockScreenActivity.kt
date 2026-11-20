@@ -3,6 +3,7 @@ package com.example
 import android.app.KeyguardManager
 import android.content.Context
 import android.graphics.Color as AndroidColor
+import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -22,6 +23,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AppRepository
 import com.example.data.LocaleHelper
+import com.example.data.WallpaperChoice
 import com.example.data.WeatherRepository
 import com.example.data.WeatherUiState
 import com.example.notifications.DynamicNotificationItem
@@ -60,6 +62,15 @@ class LockScreenActivity : ComponentActivity() {
 
     setContent {
       val settings = remember { repository.loadSettings() }
+      LaunchedEffect(settings.wallpaperChoice) {
+        if (settings.wallpaperChoice == WallpaperChoice.SYSTEM) {
+          window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+          window.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
+        } else {
+          window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
+          window.setBackgroundDrawable(ColorDrawable(AndroidColor.parseColor("#090C14")))
+        }
+      }
       val notifications by DynamicNotificationStore.notifications.collectAsStateWithLifecycle()
       val isAccessGranted = remember {
         DynamicNotificationStore.isNotificationAccessGranted(applicationContext)

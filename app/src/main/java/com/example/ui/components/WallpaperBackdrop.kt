@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -11,6 +12,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -31,11 +33,17 @@ fun WallpaperBackdrop(
   customWallpaperPath: String? = null,
   modifier: Modifier = Modifier,
 ) {
+  val containerModifier =
+    if (wallpaperChoice == WallpaperChoice.SYSTEM) {
+      modifier.fillMaxSize()
+    } else {
+      modifier.fillMaxSize().background(Color(0xFF090C14))
+    }
   Crossfade(
     targetState = wallpaperChoice to customWallpaperPath,
     animationSpec = tween(durationMillis = 360),
     label = "wallpaper_crossfade",
-    modifier = modifier.fillMaxSize(),
+    modifier = containerModifier,
   ) { (choice, customPath) ->
     when {
       choice == WallpaperChoice.CUSTOM && !customPath.isNullOrBlank() -> {

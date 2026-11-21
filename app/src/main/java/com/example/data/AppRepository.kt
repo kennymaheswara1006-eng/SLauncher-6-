@@ -19,6 +19,7 @@ import android.provider.Settings
 import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import com.example.security.PinSecurityHelper
 import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.Dispatchers
@@ -173,6 +174,18 @@ class AppRepository(context: Context) {
         rawChoice
       }
 
+    val legacyBiometric = prefs.getBoolean(KEY_BIOMETRIC_UNLOCK_ENABLED, true)
+    val storedAuthKey = prefs.getString(KEY_LOCK_AUTH_MODE, null)
+    val resolvedAuthMode =
+      if (storedAuthKey != null) {
+        LockAuthMode.fromKey(storedAuthKey)
+      } else if (!legacyBiometric) {
+        LockAuthMode.SWIPE_ONLY
+      } else {
+        LockAuthMode.BIOMETRIC_AND_PIN
+      }
+    val hasPin = hasLockPin()
+
     return LauncherSettings(
       language = AppLanguage.fromTag(prefs.getString(KEY_LANGUAGE, AppLanguage.SYSTEM.tag)),
       homeAppsLayout =
@@ -183,7 +196,9 @@ class AppRepository(context: Context) {
       welcomePopupEnabled = prefs.getBoolean(KEY_WELCOME_ENABLED, true),
       customWelcomeText = prefs.getString(KEY_WELCOME_TEXT, "").orEmpty(),
       lockScreenEnabled = prefs.getBoolean(KEY_LOCKSCREEN_ENABLED, false),
-      biometricUnlockEnabled = prefs.getBoolean(KEY_BIOMETRIC_UNLOCK_ENABLED, true),
+      lockAuthMode = resolvedAuthMode,
+      hasLockPinConfigured = hasPin,
+      biometricUnlockEnabled = resolvedAuthMode.usesBiometric,
       biometricAutoPrompt = prefs.getBoolean(KEY_BIOMETRIC_AUTO_PROMPT, true),
       shizukuRealLockEnabled = prefs.getBoolean(KEY_SHIZUKU_REAL_LOCK_ENABLED, false),
       dynamicNotificationsEnabled = prefs.getBoolean(KEY_DYNAMIC_NOTIF_ENABLED, true),
@@ -213,7 +228,8 @@ class AppRepository(context: Context) {
       .putBoolean(KEY_WELCOME_ENABLED, settings.welcomePopupEnabled)
       .putString(KEY_WELCOME_TEXT, settings.customWelcomeText)
       .putBoolean(KEY_LOCKSCREEN_ENABLED, settings.lockScreenEnabled)
-      .putBoolean(KEY_BIOMETRIC_UNLOCK_ENABLED, settings.biometricUnlockEnabled)
+      .putString(KEY_LOCK_AUTH_MODE, settings.lockAuthMode.key)
+      .putBoolean(KEY_BIOMETRIC_UNLOCK_ENABLED, settings.lockAuthMode.usesBiometric)
       .putBoolean(KEY_BIOMETRIC_AUTO_PROMPT, settings.biometricAutoPrompt)
       .putBoolean(KEY_SHIZUKU_REAL_LOCK_ENABLED, settings.shizukuRealLockEnabled)
       .putBoolean(KEY_DYNAMIC_NOTIF_ENABLED, settings.dynamicNotificationsEnabled)
@@ -225,6 +241,36 @@ class AppRepository(context: Context) {
       .putString(KEY_HIDDEN_COMPONENTS, settings.hiddenComponentKeys.joinToString(DELIMITER))
       .putString(KEY_HIDDEN_APPS_CODE, settings.hiddenAppsCode)
       .apply()
+  }
+
+  fun hasLockPin(): Boolean =
+    !prefs.getString(KEY_LOCK_PIN_HASH, null).isNullOrBlank() &&
+      !prefs.getString(KEY_LOCK_PIN_SALT, null).isNullOrBlank()
+
+  fun setLockPin(pin: String): Boolean {
+    if (!PinSecurityHelper.isValidPinFormat(pin)) return false
+    val salt = PinSecurityHelper.generateSalt()
+    val hash = PinSecurityHelper.hashPin(pin, salt)
+    prefs
+      .edit()
+      .putString(KEY_LOCK_PIN_SALT, salt)
+      .putString(KEY_LOCK_PIN_HASH, hash)
+      .apply()
+    return true
+  }
+
+  fun clearLockPin() {
+    prefs
+      .edit()
+      .remove(KEY_LOCK_PIN_SALT)
+      .remove(KEY_LOCK_PIN_HASH)
+      .apply()
+  }
+
+  fun verifyLockPin(pin: String): Boolean {
+    val hash = prefs.getString(KEY_LOCK_PIN_HASH, null)
+    val salt = prefs.getString(KEY_LOCK_PIN_SALT, null)
+    return PinSecurityHelper.verifyPin(pin = pin, expectedHash = hash, salt = salt)
   }
 
   fun isBootWelcomeEnabled(): Boolean =
@@ -578,6 +624,9 @@ class AppRepository(context: Context) {
     const val KEY_WELCOME_ENABLED = "pref_welcome_enabled"
     private const val KEY_WELCOME_TEXT = "pref_welcome_text"
     const val KEY_LOCKSCREEN_ENABLED = "pref_lockscreen_enabled"
+    private const val KEY_LOCK_AUTH_MODE = "pref_lock_auth_mode"
+    private const val KEY_LOCK_PIN_HASH = "pref_lock_pin_hash"
+    private const val KEY_LOCK_PIN_SALT = "pref_lock_pin_salt"
     const val KEY_BIOMETRIC_UNLOCK_ENABLED = "pref_biometric_unlock_enabled"
     const val KEY_BIOMETRIC_AUTO_PROMPT = "pref_biometric_auto_prompt"
     const val KEY_SHIZUKU_REAL_LOCK_ENABLED = "pref_shizuku_real_lock_enabled"

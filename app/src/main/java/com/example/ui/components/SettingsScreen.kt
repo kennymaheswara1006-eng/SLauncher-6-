@@ -85,13 +85,19 @@ import android.service.quicksettings.TileService
 import android.widget.Toast
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AddCircleOutline
+import androidx.compose.material.icons.rounded.BugReport
+import androidx.compose.material.icons.rounded.Dialpad
+import androidx.compose.material.icons.rounded.Fingerprint
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.ui.platform.LocalContext
 import com.example.R
 import com.example.data.AppLanguage
 import com.example.data.HomeAppsLayout
 import com.example.data.LauncherSettings
+import com.example.data.LockAuthMode
 import com.example.data.WallpaperChoice
+import com.example.debug.SystemDiagnosticsSnapshot
 import com.example.quicksettings.DynamicAlertsTileService
 import com.example.quicksettings.LauncherSettingsTileService
 import com.example.quicksettings.LockScreenTileService
@@ -115,6 +121,8 @@ fun SettingsScreen(
   visible: Boolean,
   settings: LauncherSettings,
   shizukuState: ShizukuConnectionState,
+  diagnostics: SystemDiagnosticsSnapshot?,
+  biometricAvailability: BiometricAvailability,
   isPostNotificationsGranted: Boolean,
   isLocationGranted: Boolean,
   isNotificationAccessGranted: Boolean,
@@ -131,9 +139,12 @@ fun SettingsScreen(
   onWelcomeTextChange: (String) -> Unit,
   onTestWelcomePopup: () -> Unit,
   onToggleLockScreen: (Boolean) -> Unit,
-  onToggleBiometricUnlock: (Boolean) -> Unit,
+  onSelectLockAuthMode: (LockAuthMode) -> Unit,
+  onTestBiometricUnlock: () -> Unit,
+  onOpenPinSetup: () -> Unit,
   onToggleBiometricAutoPrompt: (Boolean) -> Unit,
   onToggleShizukuRealLock: (Boolean) -> Unit,
+  onDisableSystemKeyguardViaShizuku: () -> Unit,
   onPreviewLockScreen: () -> Unit,
   onOpenSecuritySettings: () -> Unit,
   onToggleDynamicNotifications: (Boolean) -> Unit,
@@ -144,6 +155,8 @@ fun SettingsScreen(
   onTestDynamicNotification: () -> Unit,
   onConnectShizuku: () -> Unit,
   onAutoGrantViaShizuku: () -> Unit,
+  onDiagnoseRebindShizuku: () -> Unit,
+  onOpenDebugConsole: () -> Unit,
   onToggleAppIconSettingsOnly: (Boolean) -> Unit,
   onToggleBootWelcome: (Boolean) -> Unit,
   onHiddenAppsCodeChange: (String) -> Unit,
@@ -475,7 +488,7 @@ fun SettingsScreen(
             }
           }
 
-          // 5. Shizuku & Non-Root System Control
+          // 5. Shizuku, Non-Root System Control & Internal Debugging Console
           SettingsCard(
             icon = Icons.Rounded.Terminal,
             title = stringResource(R.string.settings_section_shizuku),
@@ -498,6 +511,16 @@ fun SettingsScreen(
                   SLauncherColors.WarningSoft
                 },
             )
+            val uidText = diagnostics?.userServiceUidOutput
+            if (!uidText.isNullOrBlank()) {
+              Text(
+                text = "UserService: $uidText",
+                style = MaterialTheme.typography.labelSmall,
+                color = SLauncherColors.TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
             Button(
               onClick = onConnectShizuku,
               colors =
@@ -511,18 +534,53 @@ fun SettingsScreen(
               Text(stringResource(R.string.settings_shizuku_connect_btn))
             }
             OutlinedButton(
+              onClick = onDiagnoseRebindShizuku,
+              shape = RoundedCornerShape(50),
+              modifier = Modifier.fillMaxWidth().testTag("shizuku_diagnose_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Refresh,
+                contentDescription = null,
+                tint = SLauncherColors.AccentPrimary,
+                modifier = Modifier.size(18.dp),
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text = stringResource(R.string.settings_shizuku_diagnose_btn),
+                color = SLauncherColors.AccentPrimary,
+              )
+            }
+            OutlinedButton(
               onClick = onAutoGrantViaShizuku,
               shape = RoundedCornerShape(50),
               modifier = Modifier.fillMaxWidth().testTag("shizuku_autogrant_button"),
             ) {
               Text(
                 text = stringResource(R.string.settings_shizuku_autogrant_btn),
-                color = SLauncherColors.AccentPrimary,
+                color = SLauncherColors.TextPrimary,
               )
+            }
+            Button(
+              onClick = onOpenDebugConsole,
+              colors =
+                ButtonDefaults.buttonColors(
+                  containerColor = SLauncherColors.AccentContainer,
+                  contentColor = SLauncherColors.AccentPrimary,
+                ),
+              shape = RoundedCornerShape(50),
+              modifier = Modifier.fillMaxWidth().testTag("open_debug_console_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.BugReport,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(stringResource(R.string.settings_debug_console_btn))
             }
           }
 
-          // 6. Native Lock Screen & Biometric Fingerprint Unlock
+          // 6. Native Lock Screen, Biometric Fingerprint, Numeric PIN & Anti Double-Lock
           SettingsCard(
             icon = Icons.Rounded.Lock,
             title = stringResource(R.string.settings_section_lockscreen),
@@ -534,14 +592,116 @@ fun SettingsScreen(
               onCheckedChange = onToggleLockScreen,
               testTag = "lockscreen_switch",
             )
-            SettingsToggleRow(
-              title = stringResource(R.string.settings_lockscreen_biometric_toggle),
-              subtitle = stringResource(R.string.settings_lockscreen_biometric_desc),
-              checked = settings.biometricUnlockEnabled,
-              onCheckedChange = onToggleBiometricUnlock,
-              testTag = "lockscreen_biometric_switch",
+
+            Text(
+              text = stringResource(R.string.lock_auth_mode_label),
+              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+              color = SLauncherColors.TextPrimary,
             )
-            if (settings.biometricUnlockEnabled) {
+
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              LanguageChip(
+                label = stringResource(R.string.lock_auth_swipe_only),
+                selected = settings.lockAuthMode == LockAuthMode.SWIPE_ONLY,
+                onClick = { onSelectLockAuthMode(LockAuthMode.SWIPE_ONLY) },
+                modifier = Modifier.weight(1f).testTag("auth_mode_swipe"),
+              )
+              LanguageChip(
+                label = stringResource(R.string.lock_auth_biometric_only),
+                selected = settings.lockAuthMode == LockAuthMode.BIOMETRIC_ONLY,
+                onClick = { onSelectLockAuthMode(LockAuthMode.BIOMETRIC_ONLY) },
+                modifier = Modifier.weight(1f).testTag("auth_mode_biometric"),
+              )
+            }
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              LanguageChip(
+                label = stringResource(R.string.lock_auth_pin_only),
+                selected = settings.lockAuthMode == LockAuthMode.PIN_ONLY,
+                onClick = { onSelectLockAuthMode(LockAuthMode.PIN_ONLY) },
+                modifier = Modifier.weight(1f).testTag("auth_mode_pin"),
+              )
+              LanguageChip(
+                label = stringResource(R.string.lock_auth_biometric_and_pin),
+                selected = settings.lockAuthMode == LockAuthMode.BIOMETRIC_AND_PIN,
+                onClick = { onSelectLockAuthMode(LockAuthMode.BIOMETRIC_AND_PIN) },
+                modifier = Modifier.weight(1f).testTag("auth_mode_biometric_pin"),
+              )
+            }
+
+            // Fingerprint sensor live status + Test button
+            val bioStatusText =
+              when (biometricAvailability) {
+                BiometricAvailability.AVAILABLE -> stringResource(R.string.settings_biometric_status_ready)
+                BiometricAvailability.NOT_ENROLLED -> stringResource(R.string.settings_biometric_status_not_enrolled)
+                BiometricAvailability.UNAVAILABLE -> stringResource(R.string.settings_biometric_status_unavailable)
+              }
+            Text(
+              text = bioStatusText,
+              style = MaterialTheme.typography.bodySmall,
+              color =
+                if (biometricAvailability == BiometricAvailability.AVAILABLE) {
+                  SLauncherColors.SoftCapsuleEmerald
+                } else {
+                  SLauncherColors.WarningSoft
+                },
+            )
+            if (biometricAvailability == BiometricAvailability.AVAILABLE) {
+              OutlinedButton(
+                onClick = onTestBiometricUnlock,
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.fillMaxWidth().testTag("test_biometric_button"),
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Fingerprint,
+                  contentDescription = null,
+                  tint = SLauncherColors.AccentPrimary,
+                  modifier = Modifier.size(18.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                  text = stringResource(R.string.settings_biometric_test_btn),
+                  color = SLauncherColors.AccentPrimary,
+                )
+              }
+            }
+
+            // Numeric PIN status + Set/Change button
+            Text(
+              text =
+                if (settings.hasLockPinConfigured) stringResource(R.string.settings_pin_status_configured)
+                else stringResource(R.string.settings_pin_status_empty),
+              style = MaterialTheme.typography.bodySmall,
+              color =
+                if (settings.hasLockPinConfigured) SLauncherColors.SoftCapsuleEmerald
+                else SLauncherColors.TextSecondary,
+            )
+            OutlinedButton(
+              onClick = onOpenPinSetup,
+              shape = RoundedCornerShape(50),
+              modifier = Modifier.fillMaxWidth().testTag("open_pin_setup_button"),
+            ) {
+              Icon(
+                imageVector = Icons.Rounded.Dialpad,
+                contentDescription = null,
+                tint = SLauncherColors.AccentPrimary,
+                modifier = Modifier.size(18.dp),
+              )
+              Spacer(modifier = Modifier.width(8.dp))
+              Text(
+                text =
+                  if (settings.hasLockPinConfigured) stringResource(R.string.settings_pin_change_btn)
+                  else stringResource(R.string.settings_pin_setup_btn),
+                color = SLauncherColors.TextPrimary,
+              )
+            }
+
+            if (settings.lockAuthMode.usesBiometric) {
               SettingsToggleRow(
                 title = stringResource(R.string.settings_lockscreen_biometric_auto_toggle),
                 subtitle = stringResource(R.string.settings_lockscreen_biometric_auto_desc),
@@ -550,6 +710,7 @@ fun SettingsScreen(
                 testTag = "lockscreen_biometric_auto_switch",
               )
             }
+
             SettingsToggleRow(
               title = stringResource(R.string.settings_lockscreen_shizuku_real_toggle),
               subtitle = stringResource(R.string.settings_lockscreen_shizuku_real_desc),
@@ -557,6 +718,61 @@ fun SettingsScreen(
               onCheckedChange = onToggleShizukuRealLock,
               testTag = "lockscreen_shizuku_real_switch",
             )
+
+            // Anti Double-Lock guidance & Shizuku action
+            val sysSecure = diagnostics?.systemKeyguardSecure == true
+            Column(
+              verticalArrangement = Arrangement.spacedBy(8.dp),
+              modifier =
+                Modifier.fillMaxWidth()
+                  .clip(RoundedCornerShape(16.dp))
+                  .background(SLauncherColors.DarkGlassPill)
+                  .border(1.dp, SLauncherColors.GlassBorder, RoundedCornerShape(16.dp))
+                  .padding(12.dp),
+            ) {
+              Text(
+                text = stringResource(R.string.settings_anti_double_lock_title),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = SLauncherColors.TextPrimary,
+              )
+              Text(
+                text =
+                  if (sysSecure) stringResource(R.string.settings_anti_double_lock_warn)
+                  else stringResource(R.string.settings_anti_double_lock_ok),
+                style = MaterialTheme.typography.bodySmall,
+                color = if (sysSecure) SLauncherColors.WarningSoft else SLauncherColors.SoftCapsuleEmerald,
+              )
+              Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+              ) {
+                OutlinedButton(
+                  onClick = onDisableSystemKeyguardViaShizuku,
+                  shape = RoundedCornerShape(50),
+                  modifier = Modifier.weight(1f).testTag("disable_keyguard_shizuku_button"),
+                ) {
+                  Text(
+                    text = stringResource(R.string.settings_anti_double_lock_shizuku_btn),
+                    color = SLauncherColors.AccentPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                }
+                OutlinedButton(
+                  onClick = onOpenSecuritySettings,
+                  shape = RoundedCornerShape(50),
+                  modifier = Modifier.weight(1f).testTag("system_security_button"),
+                ) {
+                  Text(
+                    text = stringResource(R.string.settings_lockscreen_system_btn),
+                    color = SLauncherColors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                  )
+                }
+              }
+            }
+
             Button(
               onClick = onPreviewLockScreen,
               colors =
@@ -568,16 +784,6 @@ fun SettingsScreen(
               modifier = Modifier.fillMaxWidth().testTag("preview_lockscreen_button"),
             ) {
               Text(stringResource(R.string.settings_lockscreen_preview_btn))
-            }
-            OutlinedButton(
-              onClick = onOpenSecuritySettings,
-              shape = RoundedCornerShape(50),
-              modifier = Modifier.fillMaxWidth().testTag("system_security_button"),
-            ) {
-              Text(
-                text = stringResource(R.string.settings_lockscreen_system_btn),
-                color = SLauncherColors.TextPrimary,
-              )
             }
           }
 

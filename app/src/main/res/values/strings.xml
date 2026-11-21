@@ -245,4 +245,64 @@
     <string name="shizuku_autogrant_success">Overlay &amp; notification permissions granted via Shizuku</string>
     <string name="shizuku_autogrant_need_conn">Connect Shizuku first in the Shizuku app</string>
     <string name="shizuku_headsup_updated">Stock heads-up setting updated via Shizuku</string>
+
+    <!-- Biometric Selection, Numeric PIN & Anti Double-Lock -->
+    <string name="lock_auth_mode_label">Unlock Method</string>
+    <string name="lock_auth_swipe_only">Swipe Only</string>
+    <string name="lock_auth_biometric_only">Fingerprint</string>
+    <string name="lock_auth_pin_only">Numeric PIN</string>
+    <string name="lock_auth_biometric_and_pin">Fingerprint + PIN</string>
+    <string name="settings_biometric_test_btn">Test &amp; Verify Fingerprint</string>
+    <string name="settings_biometric_status_ready">Hardware fingerprint sensor is ready</string>
+    <string name="settings_biometric_status_not_enrolled">No fingerprint enrolled on this device</string>
+    <string name="settings_biometric_status_unavailable">Fingerprint hardware unavailable</string>
+    <string name="settings_biometric_test_success">Fingerprint verified! Lock Screen ready</string>
+    <string name="settings_pin_setup_btn">Set Numeric PIN (4–6 digits)</string>
+    <string name="settings_pin_change_btn">Change Numeric PIN (Active)</string>
+    <string name="settings_pin_status_configured">Numeric PIN configured</string>
+    <string name="settings_pin_status_empty">No numeric PIN configured yet</string>
+    <string name="settings_anti_double_lock_title">Anti Double-Lock Helper</string>
+    <string name="settings_anti_double_lock_warn">Android system lock is active — disable it in Security Settings to prevent locking twice</string>
+    <string name="settings_anti_double_lock_ok">Android system lock is open — SLauncher 6 replaces it cleanly</string>
+    <string name="settings_anti_double_lock_shizuku_btn">Disable via Shizuku</string>
+    <string name="shizuku_disable_keyguard_ok">System lockscreen flag updated via Shizuku</string>
+    <string name="shizuku_disable_keyguard_fail">Unable to auto-disable — set Screen Lock to None in System Settings</string>
+
+    <!-- PIN Setup Dialog -->
+    <string name="pin_setup_title_create">Set Numeric PIN</string>
+    <string name="pin_setup_title_confirm">Confirm Numeric PIN</string>
+    <string name="pin_setup_subtitle_create">Enter 4 to 6 digits for SLauncher 6 Lock Screen</string>
+    <string name="pin_setup_subtitle_confirm">Re-enter the same %1$d digits to confirm</string>
+    <string name="pin_setup_mismatch">PINs do not match, please try again</string>
+    <string name="pin_setup_remove_btn">Remove PIN</string>
+    <string name="pin_setup_saved_toast">Numeric PIN saved</string>
+    <string name="pin_setup_removed_toast">Numeric PIN removed</string>
+
+    <!-- Minimalist Dark Lock Screen -->
+    <string name="lockscreen_enter_pin">Enter Numeric PIN</string>
+    <string name="lockscreen_wrong_pin">Incorrect PIN, try again</string>
+    <string name="lockscreen_use_pin_btn">Use Numeric PIN</string>
+    <string name="lockscreen_use_biometric_btn">Use Fingerprint</string>
+    <string name="lockscreen_biometric_need_enroll">Enroll fingerprint in System Settings or use PIN</string>
+    <string name="lockscreen_pin_not_set_hint">PIN not configured yet in Settings</string>
+    <string name="lockscreen_swipe_to_auth">Swipe up to authenticate</string>
+
+    <!-- Internal Debugging Console -->
+    <string name="settings_shizuku_diagnose_btn">Diagnose &amp; Re-bind Shizuku</string>
+    <string name="settings_debug_console_btn">Open Debugging Console &amp; Live Logs</string>
+    <string name="shizuku_rebind_success">Shizuku bound &amp; responding: %1$s</string>
+    <string name="shizuku_rebind_failed">Shizuku not ready: %1$s</string>
+    <string name="debug_console_title">Debugging Console</string>
+    <string name="debug_console_subtitle">ADB/Shizuku shell, diagnostics &amp; live event stream</string>
+    <string name="debug_cmd_hint">Run Shizuku command (e.g. id)</string>
+    <string name="debug_cmd_run">Run</string>
+    <string name="debug_btn_rebind">Re-bind Shizuku</string>
+    <string name="debug_btn_disable_keyguard">Test Anti Double-Lock</string>
+    <string name="debug_btn_copy">Copy Logs</string>
+    <string name="debug_btn_clear">Clear</string>
+    <string name="debug_logs_copied">Logs copied to clipboard</string>
+    <string name="debug_no_logs">No debug logs recorded yet.</string>
+    <string name="debug_section_diagnostics">System Diagnostics</string>
+    <string name="debug_section_shell">ADB / Shizuku Shell</string>
+    <string name="debug_section_logs">Live Logs (%1$d)</string>
 </resources>

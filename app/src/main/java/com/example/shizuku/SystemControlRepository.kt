@@ -1,5 +1,6 @@
 package com.example.shizuku
 
+import android.app.KeyguardManager
 import android.app.UiModeManager
 import android.bluetooth.BluetoothManager
 import android.content.ComponentName
@@ -13,7 +14,12 @@ import android.net.wifi.WifiManager
 import android.os.Build
 import android.provider.Settings
 import android.telephony.TelephonyManager
+import androidx.biometric.BiometricManager
 import com.example.data.QuickSettingsState
+import com.example.debug.DebugLogStore
+import com.example.debug.SystemDiagnosticsSnapshot
+import com.example.notifications.DynamicNotificationStore
+import com.example.notifications.FloatingDynamicOverlayController
 import com.example.notifications.SLauncherNotificationListener
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
@@ -305,6 +311,79 @@ class SystemControlRepository(context: Context) {
     if (!ShizukuBridge.isConnected()) return false
     return ShizukuBridge.lockDeviceScreen()
   }
+
+  suspend fun collectSystemDiagnostics(isDefaultHome: Boolean): SystemDiagnosticsSnapshot =
+    withContext(Dispatchers.IO) {
+      val installed = ShizukuBridge.isInstalled(appContext)
+      val binderAlive = ShizukuBridge.isBinderAlive()
+      val permGranted = ShizukuBridge.hasPermission()
+      val serviceBound = ShizukuBridge.isUserServiceBound()
+
+      val uidRes =
+        if (serviceBound) ShizukuBridge.probeUid()
+        else ShizukuCommandResult(false, -1, "UserService not bound")
+
+      val lockscreenDisabledSetting =
+        if (serviceBound) ShizukuBridge.querySystemLockscreenDisabledSetting()
+        else {
+          runCatching {
+              Settings.Secure.getInt(appContext.contentResolver, "lockscreen.disabled", 0)
+                .toString()
+            }
+            .getOrDefault("unknown")
+        }
+
+      val keyguardManager = appContext.getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
+      val keyguardLocked = keyguardManager?.isKeyguardLocked == true
+      val keyguardSecure = keyguardManager?.isDeviceSecure == true
+
+      val bioCode =
+        runCatching {
+            BiometricManager.from(appContext)
+              .canAuthenticate(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG or
+                  BiometricManager.Authenticators.BIOMETRIC_WEAK
+              )
+          }
+          .getOrDefault(BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE)
+      val bioLabel =
+        when (bioCode) {
+          BiometricManager.BIOMETRIC_SUCCESS -> "READY"
+          BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "NOT_ENROLLED"
+          BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE -> "NO_HARDWARE"
+          BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "HW_UNAVAILABLE"
+          else -> "CODE_$bioCode"
+        }
+
+      val snapshot =
+        SystemDiagnosticsSnapshot(
+          shizukuInstalled = installed,
+          shizukuBinderAlive = binderAlive,
+          shizukuPermissionGranted = permGranted,
+          userServiceBound = serviceBound,
+          userServiceUidOutput = uidRes.output.ifBlank { "not connected" },
+          isDefaultHome = isDefaultHome,
+          hasOverlayPermission = FloatingDynamicOverlayController.canDrawOverlays(appContext),
+          hasNotificationAccess = DynamicNotificationStore.isNotificationAccessGranted(appContext),
+          biometricStatusLabel = bioLabel,
+          systemKeyguardLocked = keyguardLocked,
+          systemKeyguardSecure = keyguardSecure,
+          systemLockscreenDisabledSetting = lockscreenDisabledSetting,
+        )
+      DebugLogStore.log(
+        "Diagnosa",
+        "Shizuku(inst=$installed, binder=$binderAlive, perm=$permGranted, bound=$serviceBound) Bio=$bioLabel KeyguardSecure=$keyguardSecure",
+      )
+      snapshot
+    }
+
+  suspend fun forceRebindShizuku(): ShizukuCommandResult = ShizukuBridge.forceRebindAndProbe()
+
+  suspend fun runDebugShellCommand(command: String): ShizukuCommandResult =
+    ShizukuBridge.runDebugShellCommand(command)
+
+  suspend fun attemptDisableSystemKeyguardViaShizuku(): ShizukuCommandResult =
+    ShizukuBridge.attemptDisableSystemKeyguard()
 
   private fun openSettingsFallback(action: String) {
     runCatching {

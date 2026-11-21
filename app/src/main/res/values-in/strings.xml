@@ -245,4 +245,64 @@
     <string name="shizuku_autogrant_success">Izin overlay &amp; notifikasi berhasil diaktifkan via Shizuku</string>
     <string name="shizuku_autogrant_need_conn">Hubungkan Shizuku terlebih dahulu di aplikasi Shizuku</string>
     <string name="shizuku_headsup_updated">Pengaturan banner bawaan diperbarui via Shizuku</string>
+
+    <!-- Pilihan Biometrik, Sandi Angka & Anti Double-Lock -->
+    <string name="lock_auth_mode_label">Metode Pengaman Lock Screen</string>
+    <string name="lock_auth_swipe_only">Usap Saja</string>
+    <string name="lock_auth_biometric_only">Sidik Jari</string>
+    <string name="lock_auth_pin_only">Sandi Angka</string>
+    <string name="lock_auth_biometric_and_pin">Sidik Jari + PIN</string>
+    <string name="settings_biometric_test_btn">Uji &amp; Verifikasi Sidik Jari</string>
+    <string name="settings_biometric_status_ready">Sensor sidik jari aktif &amp; siap digunakan</string>
+    <string name="settings_biometric_status_not_enrolled">Belum ada sidik jari terdaftar di perangkat</string>
+    <string name="settings_biometric_status_unavailable">Sensor sidik jari tidak tersedia di perangkat</string>
+    <string name="settings_biometric_test_success">Sidik jari terverifikasi! Lock Screen siap</string>
+    <string name="settings_pin_setup_btn">Atur Sandi Angka (4–6 digit)</string>
+    <string name="settings_pin_change_btn">Ubah Sandi Angka (Aktif)</string>
+    <string name="settings_pin_status_configured">Sandi angka sudah aktif</string>
+    <string name="settings_pin_status_empty">Belum ada sandi angka terpasang</string>
+    <string name="settings_anti_double_lock_title">Pencegahan Kunci Ganda (Double-Lock)</string>
+    <string name="settings_anti_double_lock_warn">Kunci layar sistem aktif — ubah ke Tidak Ada di Pengaturan Keamanan agar tidak double lock</string>
+    <string name="settings_anti_double_lock_ok">Kunci layar sistem terbuka — Lock Screen SLauncher 6 langsung tampil bersih</string>
+    <string name="settings_anti_double_lock_shizuku_btn">Nonaktifkan via Shizuku</string>
+    <string name="shizuku_disable_keyguard_ok">Pengaturan kunci bawaan diperbarui via Shizuku</string>
+    <string name="shizuku_disable_keyguard_fail">Gagal otomatis — ubah Kunci Layar ke Tidak Ada di Pengaturan Sistem</string>
+
+    <!-- Dialog Pengaturan Sandi Angka -->
+    <string name="pin_setup_title_create">Atur Sandi Angka</string>
+    <string name="pin_setup_title_confirm">Konfirmasi Sandi Angka</string>
+    <string name="pin_setup_subtitle_create">Masukkan 4 hingga 6 angka untuk Lock Screen SLauncher 6</string>
+    <string name="pin_setup_subtitle_confirm">Masukkan ulang %1$d angka yang sama untuk konfirmasi</string>
+    <string name="pin_setup_mismatch">Sandi angka tidak cocok, silakan ulangi</string>
+    <string name="pin_setup_remove_btn">Hapus Sandi</string>
+    <string name="pin_setup_saved_toast">Sandi angka berhasil disimpan</string>
+    <string name="pin_setup_removed_toast">Sandi angka dihapus</string>
+
+    <!-- Lock Screen Minimalis Gelap -->
+    <string name="lockscreen_enter_pin">Masukkan Sandi Angka</string>
+    <string name="lockscreen_wrong_pin">Sandi angka salah, coba lagi</string>
+    <string name="lockscreen_use_pin_btn">Pakai Sandi Angka</string>
+    <string name="lockscreen_use_biometric_btn">Pakai Sidik Jari</string>
+    <string name="lockscreen_biometric_need_enroll">Daftarkan sidik jari di HP atau pakai Sandi Angka</string>
+    <string name="lockscreen_pin_not_set_hint">Sandi angka belum diatur di Pengaturan</string>
+    <string name="lockscreen_swipe_to_auth">Geser ke atas untuk verifikasi</string>
+
+    <!-- Konsol Debugging Internal -->
+    <string name="settings_shizuku_diagnose_btn">Diagnosa &amp; Re-bind Shizuku</string>
+    <string name="settings_debug_console_btn">Buka Konsol Debugging &amp; Log Live</string>
+    <string name="shizuku_rebind_success">Shizuku aktif &amp; merespons: %1$s</string>
+    <string name="shizuku_rebind_failed">Shizuku belum siap: %1$s</string>
+    <string name="debug_console_title">Konsol Debugging</string>
+    <string name="debug_console_subtitle">Shell ADB/Shizuku, diagnosa &amp; log kejadian langsung</string>
+    <string name="debug_cmd_hint">Jalankan perintah Shizuku (mis. id)</string>
+    <string name="debug_cmd_run">Jalankan</string>
+    <string name="debug_btn_rebind">Re-bind Shizuku</string>
+    <string name="debug_btn_disable_keyguard">Uji Anti Double-Lock</string>
+    <string name="debug_btn_copy">Salin Log</string>
+    <string name="debug_btn_clear">Bersihkan</string>
+    <string name="debug_logs_copied">Log disalin ke clipboard</string>
+    <string name="debug_no_logs">Belum ada log debugging yang tercatat.</string>
+    <string name="debug_section_diagnostics">Diagnosa Sistem</string>
+    <string name="debug_section_shell">Konsol Shell ADB / Shizuku</string>
+    <string name="debug_section_logs">Log Langsung (%1$d)</string>
 </resources>

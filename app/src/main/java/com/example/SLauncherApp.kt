@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import androidx.core.content.ContextCompat
 import com.example.data.AppRepository
+import com.example.debug.DebugLogStore
 import com.example.notifications.DynamicNotificationStore
 
 /**
@@ -34,6 +35,24 @@ class SLauncherApp : Application() {
     ensureScreenLifecycleReceiverRegistered()
   }
 
+  private fun launchNativeLockScreen(reason: String) {
+    val lockIntent =
+      Intent(this@SLauncherApp, LockScreenActivity::class.java).apply {
+        addFlags(
+          Intent.FLAG_ACTIVITY_NEW_TASK or
+            Intent.FLAG_ACTIVITY_SINGLE_TOP or
+            Intent.FLAG_ACTIVITY_NO_ANIMATION
+        )
+      }
+    runCatching { startActivity(lockIntent) }
+      .onSuccess {
+        DebugLogStore.log("LockScreen", "Launched native LockScreenActivity ($reason)")
+      }
+      .onFailure { err ->
+        DebugLogStore.log("LockScreen", "Failed launch ($reason): ${err.message}", isError = true)
+      }
+  }
+
   private fun ensureScreenLifecycleReceiverRegistered() {
     if (screenLifecycleReceiver != null) return
     val receiver =
@@ -43,15 +62,7 @@ class SLauncherApp : Application() {
             Intent.ACTION_SCREEN_OFF -> {
               screenWentOff = true
               if (lockScreenEnabled) {
-                val lockIntent =
-                  Intent(this@SLauncherApp, LockScreenActivity::class.java).apply {
-                    addFlags(
-                      Intent.FLAG_ACTIVITY_NEW_TASK or
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP or
-                        Intent.FLAG_ACTIVITY_NO_ANIMATION
-                    )
-                  }
-                runCatching { startActivity(lockIntent) }
+                DebugLogStore.log("LockScreen", "Screen off detected; LockScreen armed for wake")
               }
             }
 
@@ -63,7 +74,12 @@ class SLauncherApp : Application() {
             Intent.ACTION_SCREEN_ON -> {
               val keyguard = getSystemService(Context.KEYGUARD_SERVICE) as? KeyguardManager
               val isKeyguardLocked = keyguard?.isKeyguardLocked == true
-              if (screenWentOff && !isKeyguardLocked && !lockScreenEnabled) {
+              if (screenWentOff && lockScreenEnabled) {
+                screenWentOff = false
+                if (!LockScreenActivity.isActiveInstance) {
+                  launchNativeLockScreen("SCREEN_ON")
+                }
+              } else if (screenWentOff && !isKeyguardLocked && !lockScreenEnabled) {
                 screenWentOff = false
                 DynamicNotificationStore.markPhoneUnlocked()
               }

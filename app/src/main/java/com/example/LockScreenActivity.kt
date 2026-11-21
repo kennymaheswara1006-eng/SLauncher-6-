@@ -1,11 +1,15 @@
 package com.example
 
 import android.app.KeyguardManager
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color as AndroidColor
 import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.WindowManager
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -14,6 +18,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +34,7 @@ import com.example.data.LocaleHelper
 import com.example.data.WallpaperChoice
 import com.example.data.WeatherRepository
 import com.example.data.WeatherUiState
+import com.example.debug.DebugLogStore
 import com.example.notifications.DynamicNotificationItem
 import com.example.notifications.DynamicNotificationStore
 import com.example.notifications.ForegroundActivityTracker
@@ -38,8 +44,9 @@ import com.example.ui.theme.SLauncher6Theme
 import kotlinx.coroutines.launch
 
 /**
- * Native full-screen Lock Screen Activity using Android's showWhenLocked + turnScreenOn,
- * upgraded with hardware Fingerprint / BiometricPrompt authentication on FragmentActivity.
+ * Native full-screen Lock Screen Activity using Android's showWhenLocked (never turnScreenOn so
+ * powering off the screen keeps the display asleep), supporting hardware Fingerprint BiometricPrompt
+ * and 4–6 digit salted PIN authentication.
  */
 class LockScreenActivity : FragmentActivity() {
 
@@ -49,16 +56,13 @@ class LockScreenActivity : FragmentActivity() {
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    isActiveInstance = true
 
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
       setShowWhenLocked(true)
-      setTurnScreenOn(true)
     } else {
       @Suppress("DEPRECATION")
-      window.addFlags(
-        WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-          WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-      )
+      window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
     }
 
     enableEdgeToEdge(
@@ -77,7 +81,7 @@ class LockScreenActivity : FragmentActivity() {
           window.setBackgroundDrawable(ColorDrawable(AndroidColor.TRANSPARENT))
         } else {
           window.clearFlags(WindowManager.LayoutParams.FLAG_SHOW_WALLPAPER)
-          window.setBackgroundDrawable(ColorDrawable(AndroidColor.parseColor("#090C14")))
+          window.setBackgroundDrawable(ColorDrawable(AndroidColor.parseColor("#070A12")))
         }
       }
 
@@ -88,11 +92,63 @@ class LockScreenActivity : FragmentActivity() {
 
       val biometricAvailability = remember { checkBiometricAvailability() }
 
-      LaunchedEffect(biometricAvailability, settings.biometricUnlockEnabled, settings.biometricAutoPrompt) {
+      LaunchedEffect(Unit) {
+        DebugLogStore.log(
+          "LockScreen",
+          "Opened mode=${settings.lockAuthMode.key}, bio=$biometricAvailability, hasPin=${settings.hasLockPinConfigured}",
+        )
+      }
+
+      // Cancel BiometricPrompt immediately on SCREEN_OFF so the display stays asleep;
+      // trigger BiometricPrompt only when the display is actually interactive (user wakes screen).
+      DisposableEffect(settings.lockAuthMode, settings.biometricAutoPrompt, biometricAvailability) {
+        val screenReceiver =
+          object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+              when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                  runCatching { biometricPrompt?.cancelAuthentication() }
+                  pendingAfterAuth = null
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                  if (
+                    settings.lockAuthMode.usesBiometric &&
+                      settings.biometricAutoPrompt &&
+                      biometricAvailability == BiometricAvailability.AVAILABLE &&
+                      isScreenInteractive()
+                  ) {
+                    launchBiometricPrompt(localizedContext) { unlockAndFinish() }
+                  }
+                }
+              }
+            }
+          }
+        val filter =
+          IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+          }
+        ContextCompat.registerReceiver(
+          this@LockScreenActivity,
+          screenReceiver,
+          filter,
+          ContextCompat.RECEIVER_EXPORTED,
+        )
+        onDispose {
+          runCatching { unregisterReceiver(screenReceiver) }
+        }
+      }
+
+      LaunchedEffect(
+        biometricAvailability,
+        settings.lockAuthMode,
+        settings.biometricAutoPrompt,
+      ) {
         if (
-          settings.biometricUnlockEnabled &&
+          settings.lockAuthMode.usesBiometric &&
             settings.biometricAutoPrompt &&
-            biometricAvailability == BiometricAvailability.AVAILABLE
+            biometricAvailability == BiometricAvailability.AVAILABLE &&
+            isScreenInteractive()
         ) {
           launchBiometricPrompt(localizedContext) { unlockAndFinish() }
         }
@@ -137,6 +193,11 @@ class LockScreenActivity : FragmentActivity() {
             notifications = notifications,
             biometricAvailability = biometricAvailability,
             biometricStatusHint = biometricStatusHintState.value,
+            onVerifyPin = { pin ->
+              val ok = repository.verifyLockPin(pin)
+              DebugLogStore.log("LockScreen", if (ok) "Numeric PIN verified" else "Numeric PIN rejected", isError = !ok)
+              ok
+            },
             onRequestBiometricPrompt = {
               launchBiometricPrompt(localizedContext) { unlockAndFinish() }
             },
@@ -165,12 +226,23 @@ class LockScreenActivity : FragmentActivity() {
 
   override fun onResume() {
     super.onResume()
+    isActiveInstance = true
     ForegroundActivityTracker.onActivityResumed()
   }
 
   override fun onPause() {
     ForegroundActivityTracker.onActivityPaused()
     super.onPause()
+  }
+
+  override fun onDestroy() {
+    isActiveInstance = false
+    super.onDestroy()
+  }
+
+  private fun isScreenInteractive(): Boolean {
+    val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
+    return pm.isInteractive
   }
 
   private fun checkBiometricAvailability(): BiometricAvailability {
@@ -188,7 +260,15 @@ class LockScreenActivity : FragmentActivity() {
   }
 
   private fun launchBiometricPrompt(localizedContext: Context, onAuthenticated: () -> Unit) {
-    if (checkBiometricAvailability() != BiometricAvailability.AVAILABLE) return
+    if (!isScreenInteractive()) {
+      DebugLogStore.log("Biometric", "Skipped auto-prompt while screen is off")
+      return
+    }
+    val availability = checkBiometricAvailability()
+    if (availability != BiometricAvailability.AVAILABLE) {
+      DebugLogStore.log("Biometric", "Prompt skipped: $availability", isError = true)
+      return
+    }
     pendingAfterAuth = onAuthenticated
     biometricStatusHintState.value = null
 
@@ -201,6 +281,7 @@ class LockScreenActivity : FragmentActivity() {
           override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
             super.onAuthenticationSucceeded(result)
             biometricStatusHintState.value = null
+            DebugLogStore.log("Biometric", "Fingerprint verified successfully")
             val action = pendingAfterAuth
             pendingAfterAuth = null
             action?.invoke() ?: unlockAndFinish()
@@ -208,6 +289,7 @@ class LockScreenActivity : FragmentActivity() {
 
           override fun onAuthenticationFailed() {
             super.onAuthenticationFailed()
+            DebugLogStore.log("Biometric", "Fingerprint mismatch attempt", isError = true)
             biometricStatusHintState.value =
               localizedContext.getString(R.string.lockscreen_biometric_failed)
           }
@@ -215,6 +297,7 @@ class LockScreenActivity : FragmentActivity() {
           override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
             super.onAuthenticationError(errorCode, errString)
             pendingAfterAuth = null
+            DebugLogStore.log("Biometric", "Prompt error ($errorCode): $errString", isError = true)
             if (
               errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
                 errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
@@ -239,7 +322,9 @@ class LockScreenActivity : FragmentActivity() {
         .setConfirmationRequired(false)
         .build()
 
-    runCatching { prompt.authenticate(promptInfo) }
+    runCatching { prompt.authenticate(promptInfo) }.onFailure { err ->
+      DebugLogStore.log("Biometric", "authenticate() threw ${err.message}", isError = true)
+    }
   }
 
   private fun openNotificationAfterUnlock(item: DynamicNotificationItem) {
@@ -254,7 +339,9 @@ class LockScreenActivity : FragmentActivity() {
 
   private fun unlockAndFinish() {
     unlockAndRun {
+      DebugLogStore.log("LockScreen", "Unlocked and closing LockScreenActivity")
       DynamicNotificationStore.markPhoneUnlocked()
+      isActiveInstance = false
       finish()
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
         overrideActivityTransition(OVERRIDE_TRANSITION_CLOSE, 0, android.R.anim.fade_out)
@@ -287,5 +374,10 @@ class LockScreenActivity : FragmentActivity() {
     } else {
       onUnlocked()
     }
+  }
+
+  companion object {
+    @Volatile
+    var isActiveInstance: Boolean = false
   }
 }

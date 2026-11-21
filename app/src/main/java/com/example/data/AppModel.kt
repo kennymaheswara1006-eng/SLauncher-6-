@@ -164,6 +164,24 @@ data class QuickSettingsState(
   val headsUpSuppressed: Boolean = false,
 )
 
+enum class LockAuthMode(val key: String) {
+  SWIPE_ONLY("swipe_only"),
+  BIOMETRIC_ONLY("biometric_only"),
+  PIN_ONLY("pin_only"),
+  BIOMETRIC_AND_PIN("biometric_and_pin");
+
+  val usesBiometric: Boolean
+    get() = this == BIOMETRIC_ONLY || this == BIOMETRIC_AND_PIN
+
+  val usesPin: Boolean
+    get() = this == PIN_ONLY || this == BIOMETRIC_AND_PIN
+
+  companion object {
+    fun fromKey(key: String?): LockAuthMode =
+      entries.firstOrNull { it.key == key } ?: BIOMETRIC_AND_PIN
+  }
+}
+
 /**
  * Persistent user customization settings stored in lightweight SharedPreferences.
  */
@@ -176,6 +194,8 @@ data class LauncherSettings(
   val welcomePopupEnabled: Boolean = true,
   val customWelcomeText: String = "",
   val lockScreenEnabled: Boolean = false,
+  val lockAuthMode: LockAuthMode = LockAuthMode.BIOMETRIC_AND_PIN,
+  val hasLockPinConfigured: Boolean = false,
   val biometricUnlockEnabled: Boolean = true,
   val biometricAutoPrompt: Boolean = true,
   val shizukuRealLockEnabled: Boolean = false,
@@ -205,10 +225,12 @@ data class LauncherUiState(
   val isQuickSettingsOpen: Boolean = false,
   val isHiddenAppsDialogOpen: Boolean = false,
   val isSettingsOpen: Boolean = false,
+  val isDebugConsoleOpen: Boolean = false,
   val isPermissionsDialogOpen: Boolean = false,
   val isBootWelcomeVisible: Boolean = false,
   val settings: LauncherSettings = LauncherSettings(),
   val quickSettingsState: QuickSettingsState = QuickSettingsState(),
+  val diagnosticsSnapshot: com.example.debug.SystemDiagnosticsSnapshot? = null,
   val isPostNotificationsGranted: Boolean = true,
   val isNotificationAccessGranted: Boolean = false,
   val isOverlayPermissionGranted: Boolean = false,

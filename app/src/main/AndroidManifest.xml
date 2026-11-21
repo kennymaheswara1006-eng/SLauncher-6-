@@ -63,7 +63,7 @@
             </intent-filter>
         </activity>
 
-        <!-- Native system Lock Screen replacement activity (uses showWhenLocked, no floating overlay) -->
+        <!-- Native system Lock Screen replacement activity (showWhenLocked only, never turnScreenOn so power-off stays asleep) -->
         <activity
             android:name=".LockScreenActivity"
             android:excludeFromRecents="true"
@@ -71,7 +71,6 @@
             android:launchMode="singleInstance"
             android:showOnLockScreen="true"
             android:showWhenLocked="true"
-            android:turnScreenOn="true"
             android:theme="@style/Theme.SLauncher6" />
 
         <!-- System-bound NotificationListenerService for live Dynamic Notifications -->

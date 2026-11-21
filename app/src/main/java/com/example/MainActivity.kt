@@ -13,7 +13,6 @@ import android.os.Bundle
 import android.service.quicksettings.TileService
 import android.view.WindowManager
 import android.widget.Toast
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -22,16 +21,21 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -42,6 +46,7 @@ import com.example.data.LocaleHelper
 import com.example.data.MusicRepository
 import com.example.data.WallpaperChoice
 import com.example.data.WeatherRepository
+import com.example.debug.DebugLogStore
 import com.example.notifications.DynamicNotificationItem
 import com.example.notifications.DynamicNotificationStore
 import com.example.notifications.FloatingDynamicOverlayController
@@ -50,11 +55,14 @@ import com.example.quicksettings.SystemQuickSettingsHelper
 import com.example.shizuku.SystemControlRepository
 import com.example.ui.LauncherViewModel
 import com.example.ui.components.AppDrawerSheet
+import com.example.ui.components.BiometricAvailability
 import com.example.ui.components.BootWelcomeScreen
+import com.example.ui.components.DebugConsoleDialog
 import com.example.ui.components.HiddenAppsDialog
 import com.example.ui.components.HomeScreen
 import com.example.ui.components.MusicLyricsDialog
 import com.example.ui.components.PermissionsDialog
+import com.example.ui.components.PinSetupDialog
 import com.example.ui.components.QuickSettingsSheet
 import com.example.ui.components.SettingsScreen
 import com.example.ui.components.WallpaperBackdrop
@@ -70,7 +78,7 @@ import com.example.ui.theme.SLauncher6Theme
  * - Shizuku-backed Custom Quick Settings Control Center + Native Biometric Lock Screen
  * - Full-screen Home app grid/list + A–Z App Drawer + Settings hub
  */
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
   private val viewModel: LauncherViewModel by viewModels {
     LauncherViewModel.Factory(
@@ -110,6 +118,8 @@ class MainActivity : ComponentActivity() {
         remember(uiState.settings.language) {
           LocaleHelper.localizedContext(this@MainActivity, uiState.settings.language)
         }
+      var isPinSetupDialogOpen by remember { mutableStateOf(false) }
+      var biometricAvailability by remember { mutableStateOf(checkBiometricAvailability()) }
 
       val refreshAllPermissions = {
         val postNotifGranted =
@@ -204,6 +214,7 @@ class MainActivity : ComponentActivity() {
           when (event) {
             Lifecycle.Event.ON_RESUME -> {
               ForegroundActivityTracker.onActivityResumed()
+              biometricAvailability = checkBiometricAvailability()
               refreshAllPermissions()
               viewModel.onLauncherResumed()
             }
@@ -245,6 +256,8 @@ class MainActivity : ComponentActivity() {
       BackHandler(enabled = true) {
         when {
           uiState.isBootWelcomeVisible -> Unit
+          isPinSetupDialogOpen -> isPinSetupDialogOpen = false
+          uiState.isDebugConsoleOpen -> viewModel.closeDebugConsole()
           uiState.isPermissionsDialogOpen -> viewModel.closePermissionsDialog()
           uiState.musicState.isFullLyricsSheetOpen -> viewModel.closeFullLyricsSheet()
           uiState.isHiddenAppsDialogOpen -> viewModel.closeHiddenAppsDialog()
@@ -376,6 +389,8 @@ class MainActivity : ComponentActivity() {
               visible = uiState.isSettingsOpen,
               settings = uiState.settings,
               shizukuState = uiState.quickSettingsState.shizukuState,
+              diagnostics = uiState.diagnosticsSnapshot,
+              biometricAvailability = biometricAvailability,
               isPostNotificationsGranted = uiState.isPostNotificationsGranted,
               isLocationGranted = uiState.isLocationGranted,
               isNotificationAccessGranted = uiState.isNotificationAccessGranted,
@@ -413,9 +428,36 @@ class MainActivity : ComponentActivity() {
                 viewModel.setLockScreenEnabled(enabled)
                 (application as? SLauncherApp)?.syncLockScreenReceiver()
               },
-              onToggleBiometricUnlock = viewModel::setBiometricUnlockEnabled,
+              onSelectLockAuthMode = viewModel::setLockAuthMode,
+              onTestBiometricUnlock = {
+                launchFingerprintTestPrompt(localizedContext) { ok ->
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(
+                        if (ok) R.string.settings_biometric_test_success
+                        else R.string.lockscreen_biometric_failed
+                      ),
+                      Toast.LENGTH_SHORT,
+                    )
+                    .show()
+                }
+              },
+              onOpenPinSetup = { isPinSetupDialogOpen = true },
               onToggleBiometricAutoPrompt = viewModel::setBiometricAutoPrompt,
               onToggleShizukuRealLock = viewModel::setShizukuRealLockEnabled,
+              onDisableSystemKeyguardViaShizuku = {
+                viewModel.attemptDisableSystemKeyguardViaShizuku { res ->
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(
+                        if (res.success) R.string.shizuku_disable_keyguard_ok
+                        else R.string.shizuku_disable_keyguard_fail
+                      ),
+                      Toast.LENGTH_LONG,
+                    )
+                    .show()
+                }
+              },
               onPreviewLockScreen = { openLockScreen() },
               onOpenSecuritySettings = viewModel::openSystemSecuritySettings,
               onToggleDynamicNotifications = viewModel::setDynamicNotificationsEnabled,
@@ -462,6 +504,22 @@ class MainActivity : ComponentActivity() {
                     .show()
                 }
               },
+              onDiagnoseRebindShizuku = {
+                viewModel.forceRebindShizuku { res ->
+                  refreshAllPermissions()
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(
+                        if (res.success) R.string.shizuku_rebind_success
+                        else R.string.shizuku_rebind_failed,
+                        res.output.ifBlank { res.exitCode.toString() },
+                      ),
+                      Toast.LENGTH_LONG,
+                    )
+                    .show()
+                }
+              },
+              onOpenDebugConsole = viewModel::openDebugConsole,
               onToggleAppIconSettingsOnly = viewModel::setAppIconOpensSettingsOnly,
               onToggleBootWelcome = viewModel::setBootWelcomeEnabled,
               onHiddenAppsCodeChange = viewModel::setHiddenAppsCode,
@@ -511,6 +569,48 @@ class MainActivity : ComponentActivity() {
                 onConnectShizuku = { viewModel.connectShizuku(this@MainActivity) },
                 onRequestDefaultHome = viewModel::openDefaultHomeSettings,
                 onDismiss = { viewModel.closePermissionsDialog(markPromptShown = true) },
+              )
+            }
+
+            if (isPinSetupDialogOpen) {
+              PinSetupDialog(
+                hasExistingPin = uiState.settings.hasLockPinConfigured,
+                onSavePin = { pin ->
+                  if (viewModel.saveLockPin(pin)) {
+                    isPinSetupDialogOpen = false
+                    Toast.makeText(
+                        localizedContext,
+                        localizedContext.getString(R.string.pin_setup_saved_toast),
+                        Toast.LENGTH_SHORT,
+                      )
+                      .show()
+                  }
+                },
+                onRemovePin = {
+                  viewModel.clearLockPin()
+                  isPinSetupDialogOpen = false
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(R.string.pin_setup_removed_toast),
+                      Toast.LENGTH_SHORT,
+                    )
+                    .show()
+                },
+                onDismiss = { isPinSetupDialogOpen = false },
+              )
+            }
+
+            if (uiState.isDebugConsoleOpen) {
+              DebugConsoleDialog(
+                shizukuState = uiState.quickSettingsState.shizukuState,
+                diagnostics = uiState.diagnosticsSnapshot,
+                onRefreshDiagnostics = viewModel::refreshDiagnostics,
+                onRebindShizuku = { callback -> viewModel.forceRebindShizuku(callback) },
+                onTestDisableKeyguard = { callback ->
+                  viewModel.attemptDisableSystemKeyguardViaShizuku(callback)
+                },
+                onRunCommand = { cmd, callback -> viewModel.runDebugShellCommand(cmd, callback) },
+                onDismiss = viewModel::closeDebugConsole,
               )
             }
 
@@ -571,5 +671,55 @@ class MainActivity : ComponentActivity() {
         addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
       }
     startActivity(lockIntent)
+  }
+
+  private fun checkBiometricAvailability(): BiometricAvailability {
+    val manager = BiometricManager.from(this)
+    val result =
+      manager.canAuthenticate(
+        BiometricManager.Authenticators.BIOMETRIC_STRONG or
+          BiometricManager.Authenticators.BIOMETRIC_WEAK
+      )
+    return when (result) {
+      BiometricManager.BIOMETRIC_SUCCESS -> BiometricAvailability.AVAILABLE
+      BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricAvailability.NOT_ENROLLED
+      else -> BiometricAvailability.UNAVAILABLE
+    }
+  }
+
+  private fun launchFingerprintTestPrompt(localizedContext: Context, onResult: (Boolean) -> Unit) {
+    val executor = ContextCompat.getMainExecutor(this)
+    val prompt =
+      BiometricPrompt(
+        this,
+        executor,
+        object : BiometricPrompt.AuthenticationCallback() {
+          override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+            super.onAuthenticationSucceeded(result)
+            DebugLogStore.log("Biometric", "Settings fingerprint test verified")
+            onResult(true)
+          }
+
+          override fun onAuthenticationFailed() {
+            super.onAuthenticationFailed()
+            DebugLogStore.log("Biometric", "Settings fingerprint test mismatch", isError = true)
+            onResult(false)
+          }
+        },
+      )
+    val info =
+      BiometricPrompt.PromptInfo.Builder()
+        .setTitle(localizedContext.getString(R.string.lockscreen_biometric_dialog_title))
+        .setSubtitle(localizedContext.getString(R.string.lockscreen_biometric_dialog_subtitle))
+        .setNegativeButtonText(localizedContext.getString(R.string.action_cancel))
+        .setAllowedAuthenticators(
+          BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.BIOMETRIC_WEAK
+        )
+        .setConfirmationRequired(false)
+        .build()
+    runCatching { prompt.authenticate(info) }.onFailure { err ->
+      DebugLogStore.log("Biometric", "Settings test failed: ${err.message}", isError = true)
+    }
   }
 }

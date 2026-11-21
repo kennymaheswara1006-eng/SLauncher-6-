@@ -7,9 +7,12 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import com.example.BuildConfig
+import com.example.debug.DebugLogStore
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,12 +37,13 @@ data class ShizukuCommandResult(
 
 /**
  * Lifecycle-safe coordinator for Shizuku (API v13+) connection, permission requests,
- * UserService binding, and non-root ADB-level system actions.
+ * UserService binding, non-root ADB-level system actions, and live DebugLogStore diagnostics.
  */
 object ShizukuBridge {
 
   private const val SHIZUKU_MANAGER_PKG = "moe.shizuku.manager"
   private const val REQUEST_CODE_SHIZUKU = 6021
+  private const val BIND_TIMEOUT_MS = 3500L
 
   private val initialized = AtomicBoolean(false)
   private val commandMutex = Mutex()
@@ -47,20 +51,31 @@ object ShizukuBridge {
   private var appContext: Context? = null
   @Volatile private var shellService: IShizukuShellService? = null
   @Volatile private var isBinding = false
+  @Volatile private var lastBindAttemptElapsedMs = 0L
 
   private val _connectionState = MutableStateFlow(ShizukuConnectionState.NOT_RUNNING)
   val connectionState: StateFlow<ShizukuConnectionState> = _connectionState.asStateFlow()
 
-  private val binderReceivedListener = Shizuku.OnBinderReceivedListener { refreshStatus() }
+  private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
+    DebugLogStore.log("Shizuku", "Binder received from Shizuku Manager")
+    refreshStatus()
+  }
   private val binderDeadListener = Shizuku.OnBinderDeadListener {
     shellService = null
     isBinding = false
+    DebugLogStore.log("Shizuku", "Binder dead / Shizuku service stopped", isError = true)
     refreshStatus()
   }
   private val permissionResultListener =
     Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
       if (requestCode == REQUEST_CODE_SHIZUKU) {
-        if (grantResult == PackageManager.PERMISSION_GRANTED) {
+        val granted = grantResult == PackageManager.PERMISSION_GRANTED
+        DebugLogStore.log(
+          "Shizuku",
+          if (granted) "API_V23 permission granted" else "API_V23 permission denied",
+          isError = !granted,
+        )
+        if (granted) {
           bindShellUserService()
         }
         refreshStatus()
@@ -72,12 +87,14 @@ object ShizukuBridge {
       override fun onServiceConnected(name: ComponentName?, service: IBinder?) {
         shellService = IShizukuShellService.Stub.asInterface(service)
         isBinding = false
+        DebugLogStore.log("Shizuku", "UserService connected: ${name?.shortClassName ?: "shell"}")
         refreshStatus()
       }
 
       override fun onServiceDisconnected(name: ComponentName?) {
         shellService = null
         isBinding = false
+        DebugLogStore.log("Shizuku", "UserService disconnected", isError = true)
         refreshStatus()
       }
     }
@@ -89,10 +106,22 @@ object ShizukuBridge {
         Shizuku.addBinderReceivedListenerSticky(binderReceivedListener)
         Shizuku.addBinderDeadListener(binderDeadListener)
         Shizuku.addRequestPermissionResultListener(permissionResultListener)
+        DebugLogStore.log("Shizuku", "Bridge initialized (pkg=${context.packageName})")
+      }.onFailure { err ->
+        DebugLogStore.log("Shizuku", "Init listener failed: ${err.message}", isError = true)
       }
     }
     refreshStatus()
   }
+
+  fun isInstalled(context: Context? = appContext): Boolean =
+    context != null && isShizukuManagerInstalled(context)
+
+  fun isBinderAlive(): Boolean = safePingBinder()
+
+  fun hasPermission(): Boolean = safeHasPermission()
+
+  fun isUserServiceBound(): Boolean = shellService?.asBinder()?.isBinderAlive == true
 
   fun refreshStatus(): ShizukuConnectionState {
     val ctx = appContext
@@ -101,41 +130,45 @@ object ShizukuBridge {
         ctx != null && !isShizukuManagerInstalled(ctx) -> ShizukuConnectionState.NOT_INSTALLED
         !safePingBinder() -> ShizukuConnectionState.NOT_RUNNING
         !safeHasPermission() -> ShizukuConnectionState.NEEDS_PERMISSION
-        shellService != null && shellService?.asBinder()?.isBinderAlive == true ->
-          ShizukuConnectionState.CONNECTED
+        shellService?.asBinder()?.isBinderAlive == true -> ShizukuConnectionState.CONNECTED
         else -> {
           bindShellUserService()
-          if (shellService != null) ShizukuConnectionState.CONNECTED
+          if (shellService?.asBinder()?.isBinderAlive == true) ShizukuConnectionState.CONNECTED
           else ShizukuConnectionState.CONNECTING
         }
       }
+    if (_connectionState.value != next) {
+      DebugLogStore.log("Shizuku", "State -> $next", isError = next == ShizukuConnectionState.NOT_RUNNING)
+    }
     _connectionState.value = next
     return next
   }
 
   fun isConnected(): Boolean =
-    refreshStatus() == ShizukuConnectionState.CONNECTED && shellService != null
+    refreshStatus() == ShizukuConnectionState.CONNECTED && shellService?.asBinder()?.isBinderAlive == true
 
   fun requestPermissionOrOpenManager(context: Context) {
     init(context)
     if (!isShizukuManagerInstalled(context)) {
+      DebugLogStore.log("Shizuku", "Shizuku Manager not installed -> opening website", isError = true)
       openShizukuManager(context)
       return
     }
     if (!safePingBinder()) {
+      DebugLogStore.log("Shizuku", "Shizuku binder not alive -> opening Shizuku Manager", isError = true)
       openShizukuManager(context)
       return
     }
     if (!safeHasPermission()) {
+      DebugLogStore.log("Shizuku", "Requesting Shizuku permission dialog")
       runCatching {
-        if (!Shizuku.shouldShowRequestPermissionRationale()) {
-          Shizuku.requestPermission(REQUEST_CODE_SHIZUKU)
-        } else {
-          Shizuku.requestPermission(REQUEST_CODE_SHIZUKU)
-        }
-      }.onFailure { openShizukuManager(context) }
+        Shizuku.requestPermission(REQUEST_CODE_SHIZUKU)
+      }.onFailure { err ->
+        DebugLogStore.log("Shizuku", "Permission request failed: ${err.message}", isError = true)
+        openShizukuManager(context)
+      }
     } else {
-      bindShellUserService()
+      bindShellUserService(forceReset = true)
     }
     refreshStatus()
   }
@@ -157,26 +190,95 @@ object ShizukuBridge {
     }
   }
 
-  private fun bindShellUserService() {
+  private fun buildUserServiceArgs(ctx: Context): Shizuku.UserServiceArgs =
+    Shizuku.UserServiceArgs(
+        ComponentName(ctx.packageName, ShizukuShellUserService::class.java.name)
+      )
+      .daemon(false)
+      .processNameSuffix("shizuku_shell")
+      .tag("slauncher6_shell_service")
+      .debuggable(BuildConfig.DEBUG)
+      .version(BuildConfig.VERSION_CODE)
+
+  private fun bindShellUserService(forceReset: Boolean = false) {
     val ctx = appContext ?: return
-    if (shellService?.asBinder()?.isBinderAlive == true || isBinding) return
+    val now = SystemClock.elapsedRealtime()
+    if (forceReset) {
+      runCatching { Shizuku.unbindUserService(buildUserServiceArgs(ctx), serviceConnection, true) }
+      shellService = null
+      isBinding = false
+    } else {
+      if (shellService?.asBinder()?.isBinderAlive == true) return
+      if (isBinding && (now - lastBindAttemptElapsedMs) < BIND_TIMEOUT_MS) return
+    }
     if (!safePingBinder() || !safeHasPermission()) return
 
     isBinding = true
+    lastBindAttemptElapsedMs = now
+    DebugLogStore.log("Shizuku", "Binding ShizukuShellUserService...")
     runCatching {
-      val args =
-        Shizuku.UserServiceArgs(
-            ComponentName(ctx.packageName, ShizukuShellUserService::class.java.name)
-          )
-          .daemon(false)
-          .processNameSuffix("shizuku_shell")
-          .tag("slauncher6_shell_service")
-          .debuggable(BuildConfig.DEBUG)
-          .version(BuildConfig.VERSION_CODE)
-      Shizuku.bindUserService(args, serviceConnection)
-    }.onFailure {
+      Shizuku.bindUserService(buildUserServiceArgs(ctx), serviceConnection)
+    }.onFailure { err ->
       isBinding = false
+      DebugLogStore.log("Shizuku", "bindUserService threw: ${err.message}", isError = true)
     }
+  }
+
+  /**
+   * Actively unbinds any stale UserService, forces a fresh bind, waits up to 2.5s for binder
+   * readiness, and probes `id` to verify ADB UID 2000 shell execution.
+   */
+  suspend fun forceRebindAndProbe(): ShizukuCommandResult =
+    withContext(Dispatchers.IO) {
+      val ctx = appContext
+        ?: return@withContext ShizukuCommandResult(false, -1, "Missing application context")
+      if (!isShizukuManagerInstalled(ctx)) {
+        DebugLogStore.log("Diagnosa", "Shizuku Manager belum terpasang", isError = true)
+        return@withContext ShizukuCommandResult(false, -1, "Shizuku Manager not installed")
+      }
+      if (!safePingBinder()) {
+        DebugLogStore.log("Diagnosa", "Shizuku Binder mati — pastikan Shizuku berjalan via Wireless Debugging/ADB", isError = true)
+        return@withContext ShizukuCommandResult(false, -1, "Binder offline (Start Shizuku first)")
+      }
+      if (!safeHasPermission()) {
+        DebugLogStore.log("Diagnosa", "Izin Shizuku belum diberikan untuk SLauncher 6", isError = true)
+        return@withContext ShizukuCommandResult(false, -1, "Permission not granted for SLauncher 6")
+      }
+
+      bindShellUserService(forceReset = true)
+      var waitedMs = 0L
+      while (shellService?.asBinder()?.isBinderAlive != true && waitedMs < 2500L) {
+        delay(100L)
+        waitedMs += 100L
+      }
+      refreshStatus()
+
+      if (shellService?.asBinder()?.isBinderAlive != true) {
+        DebugLogStore.log("Diagnosa", "Timeout menunggu UserService terhubung (${waitedMs}ms)", isError = true)
+        return@withContext ShizukuCommandResult(false, -1, "UserService bind timed out")
+      }
+      val probe = runShell("id")
+      DebugLogStore.log(
+        "Diagnosa",
+        "Probe id -> exit=${probe.exitCode}: ${probe.output}",
+        isError = !probe.success,
+      )
+      probe
+    }
+
+  suspend fun runDebugShellCommand(command: String): ShizukuCommandResult {
+    val trimmed = command.trim()
+    if (trimmed.isEmpty()) {
+      return ShizukuCommandResult(false, 1, "Empty command")
+    }
+    DebugLogStore.log("Console", "$ $trimmed")
+    val res = runShell(trimmed)
+    DebugLogStore.log(
+      "Console",
+      "exit=${res.exitCode} | ${res.output.ifBlank { "(no output)" }}",
+      isError = !res.success,
+    )
+    return res
   }
 
   private suspend fun runShell(command: String): ShizukuCommandResult =
@@ -185,6 +287,7 @@ object ShizukuBridge {
         val service = shellService
         if (service == null || !service.asBinder().isBinderAlive) {
           bindShellUserService()
+          DebugLogStore.log("Shell", "Skipped '$command': UserService not bound", isError = true)
           return@withLock ShizukuCommandResult(false, -1, "Shizuku service not connected")
         }
         try {
@@ -193,14 +296,38 @@ object ShizukuBridge {
           val header = if (newlineIdx >= 0) raw.substring(0, newlineIdx) else raw
           val body = if (newlineIdx >= 0) raw.substring(newlineIdx + 1) else ""
           val exitCode = header.removePrefix("EXIT:").trim().toIntOrNull() ?: 1
-          ShizukuCommandResult(success = exitCode == 0, exitCode = exitCode, output = body.trim())
+          val result = ShizukuCommandResult(success = exitCode == 0, exitCode = exitCode, output = body.trim())
+          if (!result.success) {
+            DebugLogStore.log("Shell", "'$command' failed ($exitCode): ${result.output}", isError = true)
+          }
+          result
         } catch (t: Throwable) {
           shellService = null
           refreshStatus()
+          DebugLogStore.log("Shell", "Exception running '$command': ${t.message}", isError = true)
           ShizukuCommandResult(false, -1, t.message.orEmpty())
         }
       }
     }
+
+  suspend fun probeUid(): ShizukuCommandResult = runShell("id")
+
+  suspend fun querySystemLockscreenDisabledSetting(): String {
+    val res = runShell("settings get secure lockscreen.disabled")
+    return if (res.success) res.output.trim().ifBlank { "null" } else "unavailable"
+  }
+
+  suspend fun attemptDisableSystemKeyguard(): ShizukuCommandResult {
+    val cmd =
+      "settings put secure lockscreen.disabled 1 && (locksettings set-disabled true 2>/dev/null || true) && settings get secure lockscreen.disabled"
+    val res = runShell(cmd)
+    DebugLogStore.log(
+      "AntiDoubleLock",
+      "Disable keyguard attempt exit=${res.exitCode}: ${res.output}",
+      isError = !res.success,
+    )
+    return res
+  }
 
   suspend fun setWifiEnabled(enabled: Boolean): Boolean =
     runShell(if (enabled) "svc wifi enable" else "svc wifi disable").success
@@ -229,7 +356,7 @@ object ShizukuBridge {
   }
 
   suspend fun lockDeviceScreen(): Boolean =
-    runShell("input keyevent 26").success
+    runShell("input keyevent 223").success
 
   suspend fun setHeadsUpNotificationsSuppressed(suppress: Boolean): Boolean =
     runShell(
@@ -262,6 +389,11 @@ object ShizukuBridge {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       runShell("pm grant $safePkg android.permission.POST_NOTIFICATIONS")
     }
+    DebugLogStore.log(
+      "Shizuku",
+      "Auto-grant result: overlay=$overlayOk, notifListener=$listenerOk",
+      isError = !(overlayOk || listenerOk),
+    )
     return overlayOk || listenerOk
   }
 

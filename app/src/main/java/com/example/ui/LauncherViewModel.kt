@@ -12,14 +12,17 @@ import com.example.data.AppRepository
 import com.example.data.HomeAppsLayout
 import com.example.data.LauncherSettings
 import com.example.data.LauncherUiState
+import com.example.data.LockAuthMode
 import com.example.data.LyricsState
 import com.example.data.MusicPlaybackInfo
 import com.example.data.MusicRepository
 import com.example.data.WallpaperChoice
 import com.example.data.WeatherRepository
 import com.example.data.WeatherUiState
+import com.example.debug.DebugLogStore
 import com.example.notifications.DynamicNotificationStore
 import com.example.shizuku.ShizukuBridge
+import com.example.shizuku.ShizukuCommandResult
 import com.example.shizuku.SystemControlRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -513,8 +516,53 @@ class LauncherViewModel(
     _uiState.update { it.copy(isHiddenAppsDialogOpen = false) }
   }
 
+  fun openDebugConsole() {
+    _uiState.update { it.copy(isDebugConsoleOpen = true) }
+    refreshDiagnostics()
+  }
+
+  fun closeDebugConsole() {
+    _uiState.update { it.copy(isDebugConsoleOpen = false) }
+  }
+
+  fun refreshDiagnostics() {
+    viewModelScope.launch {
+      val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
+      _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
+    }
+  }
+
+  fun forceRebindShizuku(onResult: (ShizukuCommandResult) -> Unit = {}) {
+    viewModelScope.launch {
+      val result = systemControlRepository.forceRebindShizuku()
+      refreshQuickSettings()
+      val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
+      _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
+      onResult(result)
+    }
+  }
+
+  fun runDebugShellCommand(command: String, onResult: (ShizukuCommandResult) -> Unit = {}) {
+    viewModelScope.launch {
+      val result = systemControlRepository.runDebugShellCommand(command)
+      val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
+      _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
+      onResult(result)
+    }
+  }
+
+  fun attemptDisableSystemKeyguardViaShizuku(onResult: (ShizukuCommandResult) -> Unit = {}) {
+    viewModelScope.launch {
+      val result = systemControlRepository.attemptDisableSystemKeyguardViaShizuku()
+      val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
+      _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
+      onResult(result)
+    }
+  }
+
   fun openSettings() {
     refreshQuickSettings()
+    refreshDiagnostics()
     _uiState.update {
       it.copy(isSettingsOpen = true, isDrawerOpen = false, isQuickSettingsOpen = false)
     }
@@ -623,10 +671,46 @@ class LauncherViewModel(
 
   fun setLockScreenEnabled(enabled: Boolean) {
     updateSettings { it.copy(lockScreenEnabled = enabled) }
+    DebugLogStore.log("LockScreen", "Custom Lock Screen ${if (enabled) "enabled" else "disabled"}")
+  }
+
+  fun setLockAuthMode(mode: LockAuthMode) {
+    updateSettings {
+      it.copy(
+        lockAuthMode = mode,
+        biometricUnlockEnabled = mode.usesBiometric,
+      )
+    }
+    DebugLogStore.log("LockScreen", "Auth mode updated -> ${mode.key}")
+  }
+
+  fun saveLockPin(pin: String): Boolean {
+    val saved = repository.setLockPin(pin)
+    if (saved) {
+      updateSettings { it.copy(hasLockPinConfigured = true) }
+      DebugLogStore.log("LockScreen", "Numeric PIN configured")
+    }
+    return saved
+  }
+
+  fun clearLockPin() {
+    repository.clearLockPin()
+    updateSettings { it.copy(hasLockPinConfigured = false) }
+    DebugLogStore.log("LockScreen", "Numeric PIN removed")
   }
 
   fun setBiometricUnlockEnabled(enabled: Boolean) {
-    updateSettings { it.copy(biometricUnlockEnabled = enabled) }
+    updateSettings { current ->
+      val updatedMode =
+        if (enabled) {
+          if (current.lockAuthMode.usesPin) LockAuthMode.BIOMETRIC_AND_PIN
+          else LockAuthMode.BIOMETRIC_ONLY
+        } else {
+          if (current.lockAuthMode.usesPin) LockAuthMode.PIN_ONLY
+          else LockAuthMode.SWIPE_ONLY
+        }
+      current.copy(biometricUnlockEnabled = enabled, lockAuthMode = updatedMode)
+    }
   }
 
   fun setBiometricAutoPrompt(enabled: Boolean) {

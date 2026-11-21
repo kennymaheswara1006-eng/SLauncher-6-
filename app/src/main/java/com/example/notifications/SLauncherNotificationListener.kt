@@ -10,14 +10,36 @@ import android.service.notification.StatusBarNotification
  */
 class SLauncherNotificationListener : NotificationListenerService() {
 
+  private var floatingOverlayController: FloatingDynamicOverlayController? = null
+
+  override fun onCreate() {
+    super.onCreate()
+    floatingOverlayController =
+      FloatingDynamicOverlayController(applicationContext) { key ->
+        dismissSystemNotification(key)
+      }
+  }
+
   override fun onListenerConnected() {
     super.onListenerConnected()
+    floatingOverlayController?.start()
     try {
       val active = activeNotifications?.mapNotNull { toDynamicItem(it) }.orEmpty()
       DynamicNotificationStore.setAll(active)
     } catch (_: Exception) {
       // Ignore transient binder exceptions on connect
     }
+  }
+
+  override fun onListenerDisconnected() {
+    super.onListenerDisconnected()
+    floatingOverlayController?.destroy()
+  }
+
+  override fun onDestroy() {
+    floatingOverlayController?.destroy()
+    floatingOverlayController = null
+    super.onDestroy()
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification?) {

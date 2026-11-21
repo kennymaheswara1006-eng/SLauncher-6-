@@ -59,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -299,6 +300,13 @@ fun DynamicPopUpCapsule(
                   scaleY = exitScale
                   translationY = -exitVal * 26.dp.toPx()
                 }
+                .shadow(
+                  elevation = 22.dp,
+                  shape = RoundedCornerShape(if (isNotifExpanded) 28.dp else 30.dp),
+                  clip = false,
+                  ambientColor = SLauncherColors.AccentPrimary.copy(alpha = 0.32f),
+                  spotColor = SLauncherColors.DeepShadowSpot,
+                )
                 .animateContentSize(
                   animationSpec =
                     spring(dampingRatio = 0.84f, stiffness = Spring.StiffnessMediumLow)

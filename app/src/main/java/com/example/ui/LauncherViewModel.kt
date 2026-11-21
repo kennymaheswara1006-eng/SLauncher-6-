@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -18,6 +19,8 @@ import com.example.data.WallpaperChoice
 import com.example.data.WeatherRepository
 import com.example.data.WeatherUiState
 import com.example.notifications.DynamicNotificationStore
+import com.example.shizuku.ShizukuBridge
+import com.example.shizuku.SystemControlRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,12 +32,13 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel managing installed apps, hidden apps filtering, universal Music Player & Lyrics
  * (via MediaSessionManager), instant search filtering, A–Z section index mapping, wallpaper
- * selection, live weather, permissions status, and persistent settings.
+ * selection, live weather, Shizuku-backed Quick Settings, permissions status, and persistent settings.
  */
 class LauncherViewModel(
   private val repository: AppRepository,
   private val weatherRepository: WeatherRepository,
   private val musicRepository: MusicRepository,
+  private val systemControlRepository: SystemControlRepository,
 ) : ViewModel() {
 
   private var lastLyricsTrackKey: String? = null
@@ -74,7 +78,21 @@ class LauncherViewModel(
     refreshApps()
     refreshWeather(forceRefresh = false)
     observeMusicSessions()
+    observeShizukuStatus()
+    refreshQuickSettings()
     syncSelectedWallpaperIfNeeded(force = false)
+  }
+
+  private fun observeShizukuStatus() {
+    viewModelScope.launch {
+      ShizukuBridge.connectionState.collect { connState ->
+        _uiState.update { state ->
+          state.copy(
+            quickSettingsState = state.quickSettingsState.copy(shizukuState = connState)
+          )
+        }
+      }
+    }
   }
 
   private fun syncSelectedWallpaperIfNeeded(force: Boolean) {
@@ -158,20 +176,30 @@ class LauncherViewModel(
       val installed = repository.loadInstalledApps()
       repository.pruneCache(installed.map { it.componentKey }.toSet())
 
-      val hiddenKeys = _uiState.value.settings.hiddenComponentKeys
+      val currentSettings = _uiState.value.settings
+      val hiddenKeys = currentSettings.hiddenComponentKeys
       val visibleApps = installed.filterNot { it.componentKey in hiddenKeys }
 
       val indexMap = buildAlphabetIndexMap(visibleApps)
       val letters = indexMap.keys.toList()
 
       _uiState.update { state ->
+        val (results, isSecret) =
+          computeSearchMatch(
+            installedApps = installed,
+            visibleApps = visibleApps,
+            hiddenKeys = state.settings.hiddenComponentKeys,
+            hiddenAppsCode = state.settings.hiddenAppsCode,
+            query = state.searchQuery,
+          )
         state.copy(
           isLoading = false,
           allInstalledApps = installed,
           allApps = visibleApps,
           alphabetIndexMap = indexMap,
           availableLetters = letters,
-          searchResults = filterApps(visibleApps, state.searchQuery),
+          searchResults = results,
+          isSecretVaultMatched = isSecret,
         )
       }
     }
@@ -212,6 +240,7 @@ class LauncherViewModel(
   fun refreshPermissionStatuses(
     postNotificationsGranted: Boolean,
     notificationAccessGranted: Boolean,
+    overlayPermissionGranted: Boolean,
     locationGranted: Boolean,
   ) {
     val wasLocationGranted = _uiState.value.isLocationGranted
@@ -219,10 +248,12 @@ class LauncherViewModel(
       it.copy(
         isPostNotificationsGranted = postNotificationsGranted,
         isNotificationAccessGranted = notificationAccessGranted,
+        isOverlayPermissionGranted = overlayPermissionGranted,
         isLocationGranted = locationGranted,
         isDefaultHome = repository.isDefaultHomeLauncher(),
       )
     }
+    ShizukuBridge.refreshStatus()
     musicRepository.startOrRefreshObserving()
     if (locationGranted && (!wasLocationGranted || _uiState.value.weatherState !is WeatherUiState.Ready)) {
       refreshWeather(forceRefresh = true)
@@ -237,6 +268,7 @@ class LauncherViewModel(
     if (refreshedSettings != _uiState.value.settings) {
       _uiState.update { it.copy(settings = refreshedSettings) }
     }
+    refreshApps()
     if (refreshedSettings.bootWelcomeEnabled && repository.consumePendingBootWelcome()) {
       SLauncherApp.hasShownBootWelcomeInProcess = true
       _uiState.update { it.copy(isBootWelcomeVisible = true) }
@@ -308,9 +340,18 @@ class LauncherViewModel(
 
   fun onSearchQueryChange(query: String) {
     _uiState.update { state ->
+      val (results, isSecret) =
+        computeSearchMatch(
+          installedApps = state.allInstalledApps,
+          visibleApps = state.allApps,
+          hiddenKeys = state.settings.hiddenComponentKeys,
+          hiddenAppsCode = state.settings.hiddenAppsCode,
+          query = query,
+        )
       state.copy(
         searchQuery = query,
-        searchResults = filterApps(state.allApps, query),
+        searchResults = results,
+        isSecretVaultMatched = isSecret,
       )
     }
   }
@@ -320,11 +361,148 @@ class LauncherViewModel(
   }
 
   fun openDrawer() {
-    _uiState.update { it.copy(isDrawerOpen = true, isSettingsOpen = false) }
+    _uiState.update {
+      it.copy(isDrawerOpen = true, isSettingsOpen = false, isQuickSettingsOpen = false)
+    }
   }
 
   fun closeDrawer() {
     _uiState.update { it.copy(isDrawerOpen = false) }
+  }
+
+  fun openQuickSettings() {
+    refreshQuickSettings()
+    _uiState.update {
+      it.copy(isQuickSettingsOpen = true, isDrawerOpen = false, isSettingsOpen = false)
+    }
+  }
+
+  fun closeQuickSettings() {
+    _uiState.update { it.copy(isQuickSettingsOpen = false) }
+  }
+
+  fun refreshQuickSettings() {
+    viewModelScope.launch {
+      val snapshot = systemControlRepository.readQuickSettingsSnapshot()
+      _uiState.update { it.copy(quickSettingsState = snapshot) }
+    }
+  }
+
+  fun toggleWifi() {
+    val current = _uiState.value.quickSettingsState.wifiEnabled
+    viewModelScope.launch {
+      val toggled = systemControlRepository.toggleWifi(current)
+      if (toggled) {
+        _uiState.update {
+          it.copy(quickSettingsState = it.quickSettingsState.copy(wifiEnabled = !current))
+        }
+      }
+      refreshQuickSettings()
+    }
+  }
+
+  fun toggleMobileData() {
+    val current = _uiState.value.quickSettingsState.mobileDataEnabled
+    viewModelScope.launch {
+      val toggled = systemControlRepository.toggleMobileData(current)
+      if (toggled) {
+        _uiState.update {
+          it.copy(quickSettingsState = it.quickSettingsState.copy(mobileDataEnabled = !current))
+        }
+      }
+      refreshQuickSettings()
+    }
+  }
+
+  fun toggleBluetooth() {
+    val current = _uiState.value.quickSettingsState.bluetoothEnabled
+    viewModelScope.launch {
+      val toggled = systemControlRepository.toggleBluetooth(current)
+      if (toggled) {
+        _uiState.update {
+          it.copy(quickSettingsState = it.quickSettingsState.copy(bluetoothEnabled = !current))
+        }
+      }
+      refreshQuickSettings()
+    }
+  }
+
+  fun toggleFlashlight() {
+    val ok = systemControlRepository.toggleFlashlight()
+    if (ok) {
+      _uiState.update {
+        it.copy(
+          quickSettingsState =
+            it.quickSettingsState.copy(flashlightEnabled = !it.quickSettingsState.flashlightEnabled)
+        )
+      }
+    }
+  }
+
+  fun toggleDarkMode() {
+    val current = _uiState.value.quickSettingsState.darkModeEnabled
+    viewModelScope.launch {
+      val toggled = systemControlRepository.toggleDarkMode(current)
+      if (toggled) {
+        _uiState.update {
+          it.copy(quickSettingsState = it.quickSettingsState.copy(darkModeEnabled = !current))
+        }
+      }
+      refreshQuickSettings()
+    }
+  }
+
+  fun toggleAutoRotate() {
+    val current = _uiState.value.quickSettingsState.autoRotateEnabled
+    viewModelScope.launch {
+      val toggled = systemControlRepository.toggleAutoRotate(current)
+      if (toggled) {
+        _uiState.update {
+          it.copy(quickSettingsState = it.quickSettingsState.copy(autoRotateEnabled = !current))
+        }
+      }
+      refreshQuickSettings()
+    }
+  }
+
+  fun setScreenBrightness(level0To255: Int) {
+    _uiState.update {
+      it.copy(quickSettingsState = it.quickSettingsState.copy(brightnessLevel = level0To255))
+    }
+    viewModelScope.launch { systemControlRepository.setBrightness(level0To255) }
+  }
+
+  fun setMediaVolumePercent(percent: Int) {
+    val updated = systemControlRepository.setMediaVolumePercent(percent)
+    _uiState.update {
+      it.copy(quickSettingsState = it.quickSettingsState.copy(mediaVolumePercent = updated))
+    }
+  }
+
+  fun connectShizuku(context: Context) {
+    ShizukuBridge.requestPermissionOrOpenManager(context)
+    refreshQuickSettings()
+  }
+
+  fun autoGrantPrivilegesViaShizuku(onResult: (Boolean) -> Unit) {
+    viewModelScope.launch {
+      val ok = systemControlRepository.autoGrantPrivilegedPermissionsViaShizuku()
+      refreshQuickSettings()
+      onResult(ok)
+    }
+  }
+
+  fun triggerLockDevice(openCustomLockActivity: () -> Unit) {
+    val useRealLock = _uiState.value.settings.shizukuRealLockEnabled
+    closeQuickSettings()
+    if (useRealLock && ShizukuBridge.isConnected()) {
+      viewModelScope.launch {
+        val locked = systemControlRepository.lockScreenViaShizuku()
+        if (!locked) openCustomLockActivity()
+      }
+    } else {
+      openCustomLockActivity()
+    }
   }
 
   fun openHiddenAppsDialog() {
@@ -336,7 +514,10 @@ class LauncherViewModel(
   }
 
   fun openSettings() {
-    _uiState.update { it.copy(isSettingsOpen = true, isDrawerOpen = false) }
+    refreshQuickSettings()
+    _uiState.update {
+      it.copy(isSettingsOpen = true, isDrawerOpen = false, isQuickSettingsOpen = false)
+    }
   }
 
   fun closeSettings() {
@@ -444,8 +625,33 @@ class LauncherViewModel(
     updateSettings { it.copy(lockScreenEnabled = enabled) }
   }
 
+  fun setBiometricUnlockEnabled(enabled: Boolean) {
+    updateSettings { it.copy(biometricUnlockEnabled = enabled) }
+  }
+
+  fun setBiometricAutoPrompt(enabled: Boolean) {
+    updateSettings { it.copy(biometricAutoPrompt = enabled) }
+  }
+
+  fun setShizukuRealLockEnabled(enabled: Boolean) {
+    updateSettings { it.copy(shizukuRealLockEnabled = enabled) }
+  }
+
   fun setDynamicNotificationsEnabled(enabled: Boolean) {
     updateSettings { it.copy(dynamicNotificationsEnabled = enabled) }
+  }
+
+  fun setFloatingOverlayPopupEnabled(enabled: Boolean) {
+    updateSettings { it.copy(floatingOverlayPopupEnabled = enabled) }
+  }
+
+  fun setSuppressSystemHeadsUp(suppress: Boolean, onResult: (Boolean) -> Unit = {}) {
+    updateSettings { it.copy(suppressSystemHeadsUp = suppress) }
+    viewModelScope.launch {
+      val ok = systemControlRepository.setHeadsUpSuppressed(suppress)
+      refreshQuickSettings()
+      onResult(ok)
+    }
   }
 
   fun setAppIconOpensSettingsOnly(enabled: Boolean) {
@@ -456,6 +662,31 @@ class LauncherViewModel(
     updateSettings { it.copy(bootWelcomeEnabled = enabled) }
   }
 
+  fun setHiddenAppsCode(code: String) {
+    updateSettings { it.copy(hiddenAppsCode = code) }
+    _uiState.update { state ->
+      val (results, isSecret) =
+        computeSearchMatch(
+          installedApps = state.allInstalledApps,
+          visibleApps = state.allApps,
+          hiddenKeys = state.settings.hiddenComponentKeys,
+          hiddenAppsCode = code,
+          query = state.searchQuery,
+        )
+      state.copy(searchResults = results, isSecretVaultMatched = isSecret)
+    }
+  }
+
+  fun hideApp(app: AppModel) {
+    val updatedKeys = _uiState.value.settings.hiddenComponentKeys + app.componentKey
+    saveHiddenAppsSelection(updatedKeys)
+  }
+
+  fun unhideApp(app: AppModel) {
+    val updatedKeys = _uiState.value.settings.hiddenComponentKeys - app.componentKey
+    saveHiddenAppsSelection(updatedKeys)
+  }
+
   fun saveHiddenAppsSelection(hiddenKeys: Set<String>) {
     updateSettings { it.copy(hiddenComponentKeys = hiddenKeys) }
     val installed = _uiState.value.allInstalledApps
@@ -463,11 +694,20 @@ class LauncherViewModel(
     val indexMap = buildAlphabetIndexMap(visibleApps)
 
     _uiState.update { state ->
+      val (results, isSecret) =
+        computeSearchMatch(
+          installedApps = installed,
+          visibleApps = visibleApps,
+          hiddenKeys = hiddenKeys,
+          hiddenAppsCode = state.settings.hiddenAppsCode,
+          query = state.searchQuery,
+        )
       state.copy(
         allApps = visibleApps,
         alphabetIndexMap = indexMap,
         availableLetters = indexMap.keys.toList(),
-        searchResults = filterApps(visibleApps, state.searchQuery),
+        searchResults = results,
+        isSecretVaultMatched = isSecret,
         isHiddenAppsDialogOpen = false,
       )
     }
@@ -518,7 +758,27 @@ class LauncherViewModel(
     repository.openAppInfo(app.packageName)
   }
 
+  fun uninstallApp(app: AppModel) {
+    repository.uninstallApp(app.packageName)
+  }
+
   suspend fun loadIcon(app: AppModel, iconSizePx: Int) = repository.loadAppIcon(app, iconSizePx)
+
+  private fun computeSearchMatch(
+    installedApps: List<AppModel>,
+    visibleApps: List<AppModel>,
+    hiddenKeys: Set<String>,
+    hiddenAppsCode: String,
+    query: String,
+  ): Pair<List<AppModel>, Boolean> {
+    val secretCode = hiddenAppsCode.trim()
+    val trimmedQuery = query.trim()
+    if (secretCode.isNotEmpty() && trimmedQuery == secretCode) {
+      val hiddenApps = installedApps.filter { it.componentKey in hiddenKeys }
+      return hiddenApps to true
+    }
+    return filterApps(visibleApps, query) to false
+  }
 
   private fun filterApps(apps: List<AppModel>, query: String): List<AppModel> {
     val trimmed = query.trim()
@@ -550,11 +810,17 @@ class LauncherViewModel(
     private val repository: AppRepository,
     private val weatherRepository: WeatherRepository,
     private val musicRepository: MusicRepository,
+    private val systemControlRepository: SystemControlRepository,
   ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
       if (modelClass.isAssignableFrom(LauncherViewModel::class.java)) {
-        return LauncherViewModel(repository, weatherRepository, musicRepository) as T
+        return LauncherViewModel(
+          repository,
+          weatherRepository,
+          musicRepository,
+          systemControlRepository,
+        ) as T
       }
       throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
     }

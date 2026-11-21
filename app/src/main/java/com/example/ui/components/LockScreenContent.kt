@@ -2,11 +2,14 @@ package com.example.ui.components
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -27,15 +30,18 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.DoneAll
+import androidx.compose.material.icons.rounded.Fingerprint
 import androidx.compose.material.icons.rounded.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -44,6 +50,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -58,13 +65,20 @@ import com.example.data.LauncherSettings
 import com.example.data.WeatherUiState
 import com.example.notifications.DynamicNotificationItem
 import com.example.ui.theme.SLauncherColors
+import com.example.ui.theme.softDeepCapsule
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
+enum class BiometricAvailability {
+  AVAILABLE,
+  NOT_ENROLLED,
+  UNAVAILABLE,
+}
+
 /**
- * Full-screen native Lock Screen UI rendered inside LockScreenActivity (no floating overlay).
- * Welcome ("Hello") pop-up intentionally appears only after unlocking into the phone.
- * Notifications feature Glassmorphism cards, real app icons, timestamps, and swipe-right dismissal (no X button).
+ * Full-screen native Lock Screen UI rendered inside LockScreenActivity (`FragmentActivity`).
+ * Features Soft Modern Capsules with Deep Shadows, Fingerprint Biometric unlock dock,
+ * Dynamic Notification cards, and swipe-up fallback unlock.
  */
 @Composable
 fun LockScreenContent(
@@ -72,6 +86,9 @@ fun LockScreenContent(
   weatherState: WeatherUiState,
   isNotificationAccessGranted: Boolean,
   notifications: List<DynamicNotificationItem>,
+  biometricAvailability: BiometricAvailability = BiometricAvailability.UNAVAILABLE,
+  biometricStatusHint: String? = null,
+  onRequestBiometricPrompt: () -> Unit = {},
   onRequestLocationPermission: () -> Unit,
   onRefreshWeather: () -> Unit,
   onRequestNotificationAccess: () -> Unit,
@@ -176,9 +193,7 @@ fun LockScreenContent(
             horizontalArrangement = Arrangement.Center,
             modifier =
               Modifier.fillMaxWidth()
-                .clip(RoundedCornerShape(22.dp))
-                .background(SLauncherColors.GlassSurfaceGradient)
-                .border(1.dp, SLauncherColors.GlassBorderGradient, RoundedCornerShape(22.dp))
+                .softDeepCapsule(cornerRadius = 26.dp, elevation = 16.dp)
                 .padding(horizontal = 18.dp, vertical = 14.dp),
           ) {
             Icon(
@@ -230,7 +245,6 @@ fun LockScreenContent(
             items(items = notifications, key = { it.key }) { item ->
               val itemSwipeX = remember(item.key) { Animatable(0f) }
               val itemAlpha = (1f - (itemSwipeX.value / 520f)).coerceIn(0f, 1f)
-              val cardShape = RoundedCornerShape(24.dp)
 
               Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -238,9 +252,7 @@ fun LockScreenContent(
                   Modifier.fillMaxWidth()
                     .offset { IntOffset(itemSwipeX.value.roundToInt(), 0) }
                     .alpha(itemAlpha)
-                    .clip(cardShape)
-                    .background(SLauncherColors.GlassFloatingCardGradient)
-                    .border(1.dp, SLauncherColors.GlassBorderGradient, cardShape)
+                    .softDeepCapsule(cornerRadius = 26.dp, elevation = 18.dp)
                     .pointerInput(item.key) {
                       detectHorizontalDragGestures(
                         onHorizontalDrag = { change, dragAmount ->
@@ -337,14 +349,87 @@ fun LockScreenContent(
           Spacer(modifier = Modifier.weight(1f))
         }
 
+        // Biometric Fingerprint Unlock Capsule Dock (when enabled on hardware)
+        if (settings.biometricUnlockEnabled && biometricAvailability == BiometricAvailability.AVAILABLE) {
+          val pulseTransition = rememberInfiniteTransition(label = "biometric_pulse")
+          val pulseScale by
+            pulseTransition.animateFloat(
+              initialValue = 1f,
+              targetValue = 1.07f,
+              animationSpec =
+                infiniteRepeatable(
+                  animation = tween(1400, easing = FastOutSlowInEasing),
+                  repeatMode = RepeatMode.Reverse,
+                ),
+              label = "fingerprint_scale",
+            )
+
+          Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(bottom = 10.dp),
+          ) {
+            if (!biometricStatusHint.isNullOrBlank()) {
+              Text(
+                text = biometricStatusHint,
+                style = MaterialTheme.typography.labelSmall,
+                color = SLauncherColors.WarningSoft,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.Center,
+              modifier =
+                Modifier.minimumInteractiveComponentSize()
+                  .softDeepCapsule(
+                    cornerRadius = 32.dp,
+                    elevation = 22.dp,
+                    isActive = true,
+                    accentColor = SLauncherColors.AccentPrimary,
+                  )
+                  .clickable(onClick = onRequestBiometricPrompt)
+                  .padding(horizontal = 22.dp, vertical = 12.dp)
+                  .testTag("lockscreen_biometric_button"),
+            ) {
+              Box(
+                contentAlignment = Alignment.Center,
+                modifier =
+                  Modifier.size(34.dp)
+                    .graphicsLayer {
+                      scaleX = pulseScale
+                      scaleY = pulseScale
+                    }
+                    .clip(CircleShape)
+                    .background(SLauncherColors.AccentContainer),
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Fingerprint,
+                  contentDescription = stringResource(R.string.lockscreen_biometric_prompt),
+                  tint = SLauncherColors.AccentPrimary,
+                  modifier = Modifier.size(22.dp),
+                )
+              }
+              Spacer(modifier = Modifier.width(10.dp))
+              Text(
+                text = stringResource(R.string.lockscreen_biometric_prompt),
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+                color = SLauncherColors.TextPrimary,
+              )
+            }
+          }
+        }
+
+        // Swipe-up fallback unlock soft capsule
         Row(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.Center,
           modifier =
             Modifier.padding(bottom = 12.dp)
-              .clip(RoundedCornerShape(50))
-              .background(SLauncherColors.GlassSurfaceGradient)
-              .border(1.dp, SLauncherColors.GlassBorderStrong, RoundedCornerShape(50))
+              .minimumInteractiveComponentSize()
+              .softDeepCapsule(cornerRadius = 28.dp, elevation = 16.dp)
               .clickable { onUnlock() }
               .padding(horizontal = 20.dp, vertical = 10.dp)
               .testTag("lockscreen_unlock_pill"),

@@ -45,6 +45,7 @@ object SLauncherColors {
   val AccentContainer = Color(0x3B64B5F6)
   val BatteryCharging = Color(0xFF6EE7B7)
   val WarningSoft = Color(0xFFFBBF24)
+  val DestructiveSoft = Color(0xFFF87171)
   val PlaceholderIconBg = Color(0x28FFFFFF)
 
   // Expressive Weather icon palette
@@ -53,4 +54,17 @@ object SLauncherColors {
   val CloudMuted = Color(0xFFCBD5E1)
   val RainCyan = Color(0xFF38BDF8)
   val StormIndigo = Color(0xFFA78BFA)
+
+  // Soft Modern Capsule with Deep Shadows palette
+  val SoftCapsuleSurfaceTop = Color(0xF0253147)
+  val SoftCapsuleSurfaceBottom = Color(0xF2121825)
+  val SoftCapsulePanelTop = Color(0xF51D2638)
+  val SoftCapsulePanelBottom = Color(0xF70D121D)
+  val SoftCapsuleActiveTop = Color(0xFF3B82F6)
+  val SoftCapsuleActiveBottom = Color(0xFF2563EB)
+  val SoftCapsuleEmerald = Color(0xFF34D399)
+  val SoftCapsuleRimHighlight = Color(0x6BFFFFFF)
+  val SoftCapsuleInnerShadow = Color(0x7302050B)
+  val DeepShadowAmbient = Color(0xD902050C)
+  val DeepShadowSpot = Color(0xE6010308)
 }

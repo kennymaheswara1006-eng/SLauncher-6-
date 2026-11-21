@@ -55,10 +55,14 @@ fun PermissionsDialog(
   isPostNotificationsGranted: Boolean,
   isLocationGranted: Boolean,
   isNotificationAccessGranted: Boolean,
+  isOverlayPermissionGranted: Boolean,
+  shizukuState: com.example.shizuku.ShizukuConnectionState,
   isDefaultHome: Boolean,
   onRequestPostNotifications: () -> Unit,
   onRequestLocation: () -> Unit,
   onRequestNotificationAccess: () -> Unit,
+  onRequestOverlayPermission: () -> Unit,
+  onConnectShizuku: () -> Unit,
   onRequestDefaultHome: () -> Unit,
   onDismiss: () -> Unit,
 ) {
@@ -110,7 +114,7 @@ fun PermissionsDialog(
 
       Column(
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier.verticalScroll(rememberScrollState()),
+        modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
       ) {
         PermissionItemCard(
           icon = Icons.Rounded.LocationOn,
@@ -142,6 +146,26 @@ fun PermissionsDialog(
           actionLabel = stringResource(R.string.perm_action_setup),
           onAction = onRequestNotificationAccess,
           testTag = "perm_notif_listener_btn",
+        )
+
+        PermissionItemCard(
+          icon = Icons.Rounded.NotificationsActive,
+          title = stringResource(R.string.perm_overlay_title),
+          description = stringResource(R.string.perm_overlay_desc),
+          isGranted = isOverlayPermissionGranted,
+          actionLabel = stringResource(R.string.perm_action_setup),
+          onAction = onRequestOverlayPermission,
+          testTag = "perm_overlay_btn",
+        )
+
+        PermissionItemCard(
+          icon = Icons.Rounded.VerifiedUser,
+          title = stringResource(R.string.perm_shizuku_title),
+          description = stringResource(R.string.perm_shizuku_desc),
+          isGranted = shizukuState == com.example.shizuku.ShizukuConnectionState.CONNECTED,
+          actionLabel = stringResource(R.string.perm_action_setup),
+          onAction = onConnectShizuku,
+          testTag = "perm_shizuku_btn",
         )
 
         PermissionItemCard(

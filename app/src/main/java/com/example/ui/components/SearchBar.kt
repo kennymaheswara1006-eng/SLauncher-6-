@@ -28,7 +28,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Apps
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,6 +46,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,15 +56,18 @@ import com.example.ui.theme.SLauncherColors
 
 /**
  * Floating inline search results panel anchored directly above the bottom search capsule
- * so matches stay within natural one-handed thumb reach.
+ * so matches stay within natural one-handed thumb reach. When the user types the secret
+ * hidden-apps code, reveals the Hidden Apps Vault with launch & unhide actions.
  */
 @Composable
 fun InlineSearchResultsCard(
   visible: Boolean,
   query: String,
   results: List<AppModel>,
+  isSecretVaultMode: Boolean = false,
   loadIcon: suspend (AppModel, Int) -> ImageBitmap?,
   onAppClick: (AppModel) -> Unit,
+  onUnhideApp: ((AppModel) -> Unit)? = null,
   modifier: Modifier = Modifier,
 ) {
   AnimatedVisibility(
@@ -71,30 +77,69 @@ fun InlineSearchResultsCard(
     modifier = modifier,
   ) {
     val cardShape = RoundedCornerShape(24.dp)
-    Box(
+    Column(
       modifier =
         Modifier.fillMaxWidth()
           .clip(cardShape)
           .background(SLauncherColors.GlassFloatingCardGradient)
-          .border(1.dp, SLauncherColors.GlassBorderGradient, cardShape),
+          .border(
+            width = if (isSecretVaultMode) 1.2.dp else 1.dp,
+            color =
+              if (isSecretVaultMode) SLauncherColors.WarningSoft.copy(alpha = 0.65f)
+              else SLauncherColors.GlassBorder,
+            shape = cardShape,
+          )
+          .testTag(if (isSecretVaultMode) "secret_vault_results_card" else "search_results_card"),
     ) {
+      if (isSecretVaultMode) {
+        Row(
+          verticalAlignment = Alignment.CenterVertically,
+          modifier =
+            Modifier.fillMaxWidth()
+              .background(SLauncherColors.WarningSoft.copy(alpha = 0.14f))
+              .padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+          Icon(
+            imageVector = Icons.Rounded.LockOpen,
+            contentDescription = null,
+            tint = SLauncherColors.WarningSoft,
+            modifier = Modifier.size(18.dp),
+          )
+          Spacer(modifier = Modifier.width(8.dp))
+          Text(
+            text = stringResource(R.string.secret_vault_title),
+            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
+            color = SLauncherColors.WarningSoft,
+            modifier = Modifier.weight(1f),
+          )
+          Text(
+            text = results.size.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = SLauncherColors.TextSecondary,
+          )
+        }
+      }
+
       if (results.isEmpty()) {
         Box(
           contentAlignment = Alignment.CenterStart,
           modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 18.dp),
         ) {
           Text(
-            text = stringResource(R.string.no_search_results, query.trim()),
+            text =
+              if (isSecretVaultMode) stringResource(R.string.secret_vault_empty)
+              else stringResource(R.string.no_search_results, query.trim()),
             style = MaterialTheme.typography.bodyMedium,
             color = SLauncherColors.TextSecondary,
           )
         }
       } else {
+        val visibleItems = if (isSecretVaultMode) results else results.take(8)
         LazyColumn(
           modifier = Modifier.fillMaxWidth().heightIn(max = 280.dp).padding(vertical = 6.dp),
         ) {
           items(
-            items = results.take(8),
+            items = visibleItems,
             key = { it.componentKey },
             contentType = { "search_result" },
           ) { app ->
@@ -115,7 +160,35 @@ fun InlineSearchResultsCard(
                 color = SLauncherColors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
               )
+              if (isSecretVaultMode && onUnhideApp != null) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier =
+                    Modifier.minimumInteractiveComponentSize()
+                      .clip(RoundedCornerShape(50))
+                      .background(SLauncherColors.AccentContainer)
+                      .border(0.8.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.45f), RoundedCornerShape(50))
+                      .clickable { onUnhideApp(app) }
+                      .padding(horizontal = 10.dp, vertical = 6.dp)
+                      .testTag("vault_unhide_${app.packageName}"),
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.Visibility,
+                    contentDescription = null,
+                    tint = SLauncherColors.AccentPrimary,
+                    modifier = Modifier.size(14.dp),
+                  )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text(
+                    text = stringResource(R.string.action_unhide_app),
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                    color = SLauncherColors.AccentPrimary,
+                  )
+                }
+              }
             }
           }
         }

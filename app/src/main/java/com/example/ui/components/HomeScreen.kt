@@ -32,12 +32,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Home
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -88,6 +85,9 @@ fun HomeScreen(
   loadIcon: suspend (AppModel, Int) -> ImageBitmap?,
   onLaunchApp: (AppModel) -> Unit,
   onOpenAppInfo: (AppModel) -> Unit,
+  onHideApp: (AppModel) -> Unit,
+  onUnhideApp: (AppModel) -> Unit,
+  onUninstallApp: (AppModel) -> Unit,
   onSearchQueryChange: (String) -> Unit,
   onClearSearch: () -> Unit,
   onOpenDrawer: () -> Unit,
@@ -110,6 +110,7 @@ fun HomeScreen(
   modifier: Modifier = Modifier,
 ) {
   var dragAccumulator by remember { mutableFloatStateOf(0f) }
+  var selectedHoldApp by remember { mutableStateOf<AppModel?>(null) }
 
   val defaultWelcome = stringResource(R.string.default_welcome_message)
   val resolvedWelcomeMessage =
@@ -379,7 +380,7 @@ fun HomeScreen(
                 app = app,
                 loadIcon = loadIcon,
                 onLaunch = { onLaunchApp(app) },
-                onOpenInfo = { onOpenAppInfo(app) },
+                onLongClick = { selectedHoldApp = app },
               )
             }
           } else {
@@ -393,7 +394,7 @@ fun HomeScreen(
                 app = app,
                 loadIcon = loadIcon,
                 onLaunch = { onLaunchApp(app) },
-                onOpenInfo = { onOpenAppInfo(app) },
+                onLongClick = { selectedHoldApp = app },
                 testTag = "home_list_app_${app.packageName}",
               )
             }
@@ -410,8 +411,10 @@ fun HomeScreen(
           visible = uiState.searchQuery.isNotBlank(),
           query = uiState.searchQuery,
           results = uiState.searchResults,
+          isSecretVaultMode = uiState.isSecretVaultMatched,
           loadIcon = loadIcon,
           onAppClick = onLaunchApp,
+          onUnhideApp = onUnhideApp,
         )
 
         SearchBar(
@@ -425,6 +428,17 @@ fun HomeScreen(
         )
       }
     }
+
+    selectedHoldApp?.let { holdApp ->
+      AppHoldActionDialog(
+        app = holdApp,
+        loadIcon = loadIcon,
+        onOpenAppInfo = onOpenAppInfo,
+        onHideApp = onHideApp,
+        onUninstallApp = onUninstallApp,
+        onDismiss = { selectedHoldApp = null },
+      )
+    }
   }
 }
 
@@ -434,51 +448,42 @@ private fun HomeAppGridTile(
   app: AppModel,
   loadIcon: suspend (AppModel, Int) -> ImageBitmap?,
   onLaunch: () -> Unit,
-  onOpenInfo: () -> Unit,
+  onLongClick: () -> Unit,
 ) {
-  var menuExpanded by remember { mutableStateOf(false) }
   val tileShape = RoundedCornerShape(20.dp)
 
-  Box(contentAlignment = Alignment.Center) {
-    Column(
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-      modifier =
-        Modifier.fillMaxWidth()
-          .clip(tileShape)
-          .background(
-            Brush.verticalGradient(
-              listOf(Color.White.copy(alpha = 0.085f), Color.White.copy(alpha = 0.03f))
-            )
+  Column(
+    horizontalAlignment = Alignment.CenterHorizontally,
+    verticalArrangement = Arrangement.Center,
+    modifier =
+      Modifier.fillMaxWidth()
+        .clip(tileShape)
+        .background(
+          Brush.verticalGradient(
+            listOf(Color.White.copy(alpha = 0.085f), Color.White.copy(alpha = 0.03f))
           )
-          .border(0.8.dp, SLauncherColors.GlassBorderGradient, tileShape)
-          .combinedClickable(
-            onClick = onLaunch,
-            onLongClick = { menuExpanded = true },
-          )
-          .padding(horizontal = 4.dp, vertical = 10.dp)
-          .testTag("home_grid_app_${app.packageName}"),
-    ) {
-      AppIconImage(app = app, loadIcon = loadIcon, size = 46.dp)
-      Spacer(modifier = Modifier.height(6.dp))
-      Text(
-        text = app.label,
-        style =
-          MaterialTheme.typography.labelSmall.copy(
-            fontSize = 11.5.sp,
-            shadow = WallpaperLegibilityShadow,
-          ),
-        color = SLauncherColors.TextPrimary,
-        textAlign = TextAlign.Center,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-    }
-
-    AppContextDropdown(
-      expanded = menuExpanded,
-      onDismiss = { menuExpanded = false },
-      onOpenInfo = onOpenInfo,
+        )
+        .border(0.8.dp, SLauncherColors.GlassBorderGradient, tileShape)
+        .combinedClickable(
+          onClick = onLaunch,
+          onLongClick = onLongClick,
+        )
+        .padding(horizontal = 4.dp, vertical = 10.dp)
+        .testTag("home_grid_app_${app.packageName}"),
+  ) {
+    AppIconImage(app = app, loadIcon = loadIcon, size = 46.dp)
+    Spacer(modifier = Modifier.height(6.dp))
+    Text(
+      text = app.label,
+      style =
+        MaterialTheme.typography.labelSmall.copy(
+          fontSize = 11.5.sp,
+          shadow = WallpaperLegibilityShadow,
+        ),
+      color = SLauncherColors.TextPrimary,
+      textAlign = TextAlign.Center,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
     )
   }
 }
@@ -489,79 +494,36 @@ private fun HomeAppListRow(
   app: AppModel,
   loadIcon: suspend (AppModel, Int) -> ImageBitmap?,
   onLaunch: () -> Unit,
-  onOpenInfo: () -> Unit,
+  onLongClick: () -> Unit,
   testTag: String,
 ) {
-  var menuExpanded by remember { mutableStateOf(false) }
-
-  Box {
-    Row(
-      verticalAlignment = Alignment.CenterVertically,
-      modifier =
-        Modifier.fillMaxWidth()
-          .heightIn(min = 50.dp)
-          .clip(RoundedCornerShape(16.dp))
-          .combinedClickable(
-            onClick = onLaunch,
-            onLongClick = { menuExpanded = true },
-          )
-          .padding(horizontal = 6.dp, vertical = 6.dp)
-          .testTag(testTag),
-    ) {
-      AppIconImage(app = app, loadIcon = loadIcon, size = 38.dp)
-      Spacer(modifier = Modifier.width(14.dp))
-      Text(
-        text = app.label,
-        style =
-          MaterialTheme.typography.titleMedium.copy(
-            fontSize = 15.5.sp,
-            fontWeight = FontWeight.Medium,
-            shadow = WallpaperLegibilityShadow,
-          ),
-        color = SLauncherColors.TextPrimary,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-        modifier = Modifier.weight(1f),
-      )
-    }
-
-    AppContextDropdown(
-      expanded = menuExpanded,
-      onDismiss = { menuExpanded = false },
-      onOpenInfo = onOpenInfo,
-    )
-  }
-}
-
-@Composable
-private fun AppContextDropdown(
-  expanded: Boolean,
-  onDismiss: () -> Unit,
-  onOpenInfo: () -> Unit,
-) {
-  DropdownMenu(
-    expanded = expanded,
-    onDismissRequest = onDismiss,
-    modifier = Modifier.background(SLauncherColors.DarkGlassElevated),
+  Row(
+    verticalAlignment = Alignment.CenterVertically,
+    modifier =
+      Modifier.fillMaxWidth()
+        .heightIn(min = 50.dp)
+        .clip(RoundedCornerShape(16.dp))
+        .combinedClickable(
+          onClick = onLaunch,
+          onLongClick = onLongClick,
+        )
+        .padding(horizontal = 6.dp, vertical = 6.dp)
+        .testTag(testTag),
   ) {
-    DropdownMenuItem(
-      text = {
-        Text(
-          text = stringResource(R.string.action_app_info),
-          color = SLauncherColors.TextPrimary,
-        )
-      },
-      leadingIcon = {
-        Icon(
-          imageVector = Icons.Rounded.Info,
-          contentDescription = null,
-          tint = SLauncherColors.TextSecondary,
-        )
-      },
-      onClick = {
-        onDismiss()
-        onOpenInfo()
-      },
+    AppIconImage(app = app, loadIcon = loadIcon, size = 38.dp)
+    Spacer(modifier = Modifier.width(14.dp))
+    Text(
+      text = app.label,
+      style =
+        MaterialTheme.typography.titleMedium.copy(
+          fontSize = 15.5.sp,
+          fontWeight = FontWeight.Medium,
+          shadow = WallpaperLegibilityShadow,
+        ),
+      color = SLauncherColors.TextPrimary,
+      maxLines = 1,
+      overflow = TextOverflow.Ellipsis,
+      modifier = Modifier.weight(1f),
     )
   }
 }

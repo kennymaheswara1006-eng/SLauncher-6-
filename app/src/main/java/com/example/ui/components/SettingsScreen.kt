@@ -40,6 +40,7 @@ import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.VerifiedUser
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Wallpaper
 import androidx.compose.material3.Button
@@ -58,17 +59,23 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -92,23 +99,26 @@ import com.example.quicksettings.SystemQuickSettingsHelper
 import com.example.quicksettings.WelcomePopupTileService
 import com.example.ui.theme.SLauncherColors
 
+import androidx.compose.material.icons.rounded.Terminal
+import com.example.shizuku.ShizukuConnectionState
+
 /**
  * Comprehensive SLauncher 6 Settings hub for configuring:
- * - Language (Follow System / Bahasa Indonesia / English)
- * - Wallpaper Picker (System Live + 3 bundled photo wallpapers + Apply to System Wallpaper)
- * - Permissions & Setup checklist
- * - Welcome Dynamic Pop-Up (custom message, default localized "Halo Selamat Datang", 3s test)
- * - Native Lock Screen (no overlay, showWhenLocked activity + system security shortcut)
- * - Dynamic Notifications (NotificationListener access + live preview trigger)
- * - Home Screen layout, favorites, and default Home launcher status
+ * - Language, Wallpaper Picker, Permissions & Setup checklist
+ * - Shizuku & Non-Root Control Center + 1-tap auto-permission grants
+ * - Welcome Dynamic Pop-Up & Floating Dynamic Notification overlay across all apps
+ * - Native Lock Screen with hardware Fingerprint / Biometric unlock
+ * - Built-in System Quick Settings Tiles & Home Screen layout
  */
 @Composable
 fun SettingsScreen(
   visible: Boolean,
   settings: LauncherSettings,
+  shizukuState: ShizukuConnectionState,
   isPostNotificationsGranted: Boolean,
   isLocationGranted: Boolean,
   isNotificationAccessGranted: Boolean,
+  isOverlayPermissionGranted: Boolean,
   isDefaultHome: Boolean,
   onSelectLanguage: (AppLanguage) -> Unit,
   onSelectWallpaper: (WallpaperChoice) -> Unit,
@@ -121,13 +131,22 @@ fun SettingsScreen(
   onWelcomeTextChange: (String) -> Unit,
   onTestWelcomePopup: () -> Unit,
   onToggleLockScreen: (Boolean) -> Unit,
+  onToggleBiometricUnlock: (Boolean) -> Unit,
+  onToggleBiometricAutoPrompt: (Boolean) -> Unit,
+  onToggleShizukuRealLock: (Boolean) -> Unit,
   onPreviewLockScreen: () -> Unit,
   onOpenSecuritySettings: () -> Unit,
   onToggleDynamicNotifications: (Boolean) -> Unit,
+  onToggleFloatingOverlayPopup: (Boolean) -> Unit,
+  onToggleSuppressSystemHeadsUp: (Boolean) -> Unit,
   onRequestNotificationAccess: () -> Unit,
+  onRequestOverlayPermission: () -> Unit,
   onTestDynamicNotification: () -> Unit,
+  onConnectShizuku: () -> Unit,
+  onAutoGrantViaShizuku: () -> Unit,
   onToggleAppIconSettingsOnly: (Boolean) -> Unit,
   onToggleBootWelcome: (Boolean) -> Unit,
+  onHiddenAppsCodeChange: (String) -> Unit,
   onOpenHiddenAppsEditor: () -> Unit,
   onOpenPermissionsDialog: () -> Unit,
   onSetDefaultHome: () -> Unit,
@@ -144,7 +163,11 @@ fun SettingsScreen(
   ) {
     val defaultWelcomeText = stringResource(R.string.default_welcome_message)
     val allCoreReady =
-      isPostNotificationsGranted && isLocationGranted && isNotificationAccessGranted && isDefaultHome
+      isPostNotificationsGranted &&
+        isLocationGranted &&
+        isNotificationAccessGranted &&
+        isOverlayPermissionGranted &&
+        isDefaultHome
 
     Box(
       contentAlignment = Alignment.TopCenter,
@@ -452,7 +475,54 @@ fun SettingsScreen(
             }
           }
 
-          // 5. Native Lock Screen (Non-Overlay)
+          // 5. Shizuku & Non-Root System Control
+          SettingsCard(
+            icon = Icons.Rounded.Terminal,
+            title = stringResource(R.string.settings_section_shizuku),
+          ) {
+            val shizukuStatusLabel =
+              when (shizukuState) {
+                ShizukuConnectionState.CONNECTED -> stringResource(R.string.shizuku_status_connected)
+                ShizukuConnectionState.CONNECTING -> stringResource(R.string.shizuku_status_connecting)
+                ShizukuConnectionState.NEEDS_PERMISSION -> stringResource(R.string.shizuku_status_needs_perm)
+                ShizukuConnectionState.NOT_RUNNING -> stringResource(R.string.shizuku_status_not_running)
+                ShizukuConnectionState.NOT_INSTALLED -> stringResource(R.string.shizuku_status_not_installed)
+              }
+            Text(
+              text = shizukuStatusLabel,
+              style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
+              color =
+                if (shizukuState == ShizukuConnectionState.CONNECTED) {
+                  SLauncherColors.SoftCapsuleEmerald
+                } else {
+                  SLauncherColors.WarningSoft
+                },
+            )
+            Button(
+              onClick = onConnectShizuku,
+              colors =
+                ButtonDefaults.buttonColors(
+                  containerColor = SLauncherColors.AccentPrimary,
+                  contentColor = MaterialTheme.colorScheme.onPrimary,
+                ),
+              shape = RoundedCornerShape(50),
+              modifier = Modifier.fillMaxWidth().testTag("shizuku_connect_button"),
+            ) {
+              Text(stringResource(R.string.settings_shizuku_connect_btn))
+            }
+            OutlinedButton(
+              onClick = onAutoGrantViaShizuku,
+              shape = RoundedCornerShape(50),
+              modifier = Modifier.fillMaxWidth().testTag("shizuku_autogrant_button"),
+            ) {
+              Text(
+                text = stringResource(R.string.settings_shizuku_autogrant_btn),
+                color = SLauncherColors.AccentPrimary,
+              )
+            }
+          }
+
+          // 6. Native Lock Screen & Biometric Fingerprint Unlock
           SettingsCard(
             icon = Icons.Rounded.Lock,
             title = stringResource(R.string.settings_section_lockscreen),
@@ -463,6 +533,29 @@ fun SettingsScreen(
               checked = settings.lockScreenEnabled,
               onCheckedChange = onToggleLockScreen,
               testTag = "lockscreen_switch",
+            )
+            SettingsToggleRow(
+              title = stringResource(R.string.settings_lockscreen_biometric_toggle),
+              subtitle = stringResource(R.string.settings_lockscreen_biometric_desc),
+              checked = settings.biometricUnlockEnabled,
+              onCheckedChange = onToggleBiometricUnlock,
+              testTag = "lockscreen_biometric_switch",
+            )
+            if (settings.biometricUnlockEnabled) {
+              SettingsToggleRow(
+                title = stringResource(R.string.settings_lockscreen_biometric_auto_toggle),
+                subtitle = stringResource(R.string.settings_lockscreen_biometric_auto_desc),
+                checked = settings.biometricAutoPrompt,
+                onCheckedChange = onToggleBiometricAutoPrompt,
+                testTag = "lockscreen_biometric_auto_switch",
+              )
+            }
+            SettingsToggleRow(
+              title = stringResource(R.string.settings_lockscreen_shizuku_real_toggle),
+              subtitle = stringResource(R.string.settings_lockscreen_shizuku_real_desc),
+              checked = settings.shizukuRealLockEnabled,
+              onCheckedChange = onToggleShizukuRealLock,
+              testTag = "lockscreen_shizuku_real_switch",
             )
             Button(
               onClick = onPreviewLockScreen,
@@ -488,7 +581,7 @@ fun SettingsScreen(
             }
           }
 
-          // 6. Dynamic Notifications
+          // 7. Dynamic Notifications & Floating Overlay Across All Apps
           SettingsCard(
             icon = Icons.Rounded.NotificationsActive,
             title = stringResource(R.string.settings_section_notifications),
@@ -502,6 +595,34 @@ fun SettingsScreen(
               onCheckedChange = onToggleDynamicNotifications,
               testTag = "dynamic_notif_switch",
             )
+            SettingsToggleRow(
+              title = stringResource(R.string.settings_notif_floating_toggle),
+              subtitle = stringResource(R.string.settings_notif_floating_desc),
+              checked = settings.floatingOverlayPopupEnabled,
+              onCheckedChange = onToggleFloatingOverlayPopup,
+              testTag = "dynamic_notif_floating_switch",
+            )
+            SettingsToggleRow(
+              title = stringResource(R.string.settings_notif_suppress_headsup_toggle),
+              subtitle = stringResource(R.string.settings_notif_suppress_headsup_desc),
+              checked = settings.suppressSystemHeadsUp,
+              onCheckedChange = onToggleSuppressSystemHeadsUp,
+              testTag = "dynamic_notif_suppress_headsup_switch",
+            )
+            if (!isOverlayPermissionGranted) {
+              Button(
+                onClick = onRequestOverlayPermission,
+                colors =
+                  ButtonDefaults.buttonColors(
+                    containerColor = SLauncherColors.AccentPrimary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                  ),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.fillMaxWidth().testTag("grant_overlay_button"),
+              ) {
+                Text(stringResource(R.string.settings_notif_overlay_grant_btn))
+              }
+            }
             Row(
               horizontalArrangement = Arrangement.spacedBy(8.dp),
               modifier = Modifier.fillMaxWidth(),
@@ -533,7 +654,7 @@ fun SettingsScreen(
             }
           }
 
-          // 7. Built-In System Quick Settings Tile Editor
+          // 8. Built-In System Quick Settings Tile Editor
           SystemQuickSettingsCard()
 
           // 8. Home Screen & Launcher Behavior
@@ -570,6 +691,77 @@ fun SettingsScreen(
               checked = settings.appIconOpensSettingsOnly,
               onCheckedChange = onToggleAppIconSettingsOnly,
               testTag = "app_icon_settings_only_switch",
+            )
+
+            var showSecretCode by remember { mutableStateOf(false) }
+
+            OutlinedTextField(
+              value = settings.hiddenAppsCode,
+              onValueChange = onHiddenAppsCodeChange,
+              singleLine = true,
+              label = { Text(stringResource(R.string.settings_hidden_code_label)) },
+              placeholder = {
+                Text(
+                  text = stringResource(R.string.settings_hidden_code_hint),
+                  color = SLauncherColors.TextMuted,
+                )
+              },
+              supportingText = {
+                Text(
+                  text = stringResource(R.string.settings_hidden_code_desc),
+                  color = SLauncherColors.TextSecondary,
+                )
+              },
+              leadingIcon = {
+                Icon(
+                  imageVector = Icons.Rounded.Lock,
+                  contentDescription = null,
+                  tint = SLauncherColors.AccentPrimary,
+                )
+              },
+              trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                  IconButton(
+                    onClick = { showSecretCode = !showSecretCode },
+                    modifier = Modifier.testTag("toggle_hidden_code_visibility"),
+                  ) {
+                    Icon(
+                      imageVector =
+                        if (showSecretCode) Icons.Rounded.VisibilityOff
+                        else Icons.Rounded.Visibility,
+                      contentDescription = null,
+                      tint = SLauncherColors.TextSecondary,
+                    )
+                  }
+                  if (settings.hiddenAppsCode.isNotEmpty()) {
+                    IconButton(
+                      onClick = { onHiddenAppsCodeChange("") },
+                      modifier = Modifier.testTag("clear_hidden_code_button"),
+                    ) {
+                      Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = stringResource(R.string.cd_clear_search),
+                        tint = SLauncherColors.TextSecondary,
+                      )
+                    }
+                  }
+                }
+              },
+              visualTransformation =
+                if (showSecretCode) VisualTransformation.None
+                else PasswordVisualTransformation(),
+              shape = RoundedCornerShape(16.dp),
+              colors =
+                OutlinedTextFieldDefaults.colors(
+                  focusedBorderColor = SLauncherColors.AccentPrimary,
+                  unfocusedBorderColor = SLauncherColors.GlassBorder,
+                  focusedTextColor = SLauncherColors.TextPrimary,
+                  unfocusedTextColor = SLauncherColors.TextPrimary,
+                  focusedLabelColor = SLauncherColors.AccentPrimary,
+                  unfocusedLabelColor = SLauncherColors.TextSecondary,
+                  cursorColor = SLauncherColors.AccentPrimary,
+                ),
+              modifier = Modifier.fillMaxWidth().testTag("hidden_apps_code_input"),
             )
 
             OutlinedButton(
@@ -657,7 +849,7 @@ private fun CustomWallpaperChoiceTile(
   index: Int,
 ) {
   val shape = RoundedCornerShape(18.dp)
-  val thumbState = rememberLocalWallpaperBitmap(path = path, maxDimensionPx = 280)
+  val thumbState = rememberLocalWallpaperBitmap(path = path, maxDimensionPx = 360)
   Box(
     modifier =
       Modifier.width(96.dp)
@@ -677,6 +869,7 @@ private fun CustomWallpaperChoiceTile(
         bitmap = bmp,
         contentDescription = label,
         contentScale = ContentScale.Crop,
+        filterQuality = FilterQuality.Medium,
         modifier = Modifier.fillMaxSize(),
       )
     } else {
@@ -761,12 +954,19 @@ private fun WallpaperChoiceTile(
   ) {
     val resId = choice.drawableRes
     if (resId != null) {
-      Image(
-        painter = painterResource(id = resId),
-        contentDescription = label,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.fillMaxSize(),
-      )
+      val thumbState = rememberBundledWallpaperBitmap(resId = resId, maxDimensionPx = 360)
+      val bmp = thumbState.value
+      if (bmp != null) {
+        Image(
+          bitmap = bmp,
+          contentDescription = label,
+          contentScale = ContentScale.Crop,
+          filterQuality = FilterQuality.Medium,
+          modifier = Modifier.fillMaxSize(),
+        )
+      } else {
+        Box(modifier = Modifier.fillMaxSize().background(SLauncherColors.DarkGlassPill))
+      }
     } else {
       Box(
         contentAlignment = Alignment.Center,

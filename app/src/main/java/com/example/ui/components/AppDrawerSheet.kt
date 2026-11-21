@@ -36,10 +36,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -85,6 +82,8 @@ fun AppDrawerSheet(
   loadIcon: suspend (AppModel, Int) -> ImageBitmap?,
   onAppClick: (AppModel) -> Unit,
   onOpenAppInfo: (AppModel) -> Unit,
+  onHideApp: (AppModel) -> Unit,
+  onUninstallApp: (AppModel) -> Unit,
   onOpenSettings: () -> Unit,
   onClose: () -> Unit,
 ) {
@@ -101,6 +100,7 @@ fun AppDrawerSheet(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var activeLetterBubble by remember { mutableStateOf<Char?>(null) }
+    var selectedHoldApp by remember { mutableStateOf<AppModel?>(null) }
 
     fun jumpToLetter(letter: Char) {
       activeLetterBubble = letter
@@ -194,75 +194,46 @@ fun AppDrawerSheet(
             ) { index, app ->
               val showLetterGutter =
                 index == 0 || allApps[index - 1].sectionLetter != app.sectionLetter
-              var menuExpanded by remember { mutableStateOf(false) }
 
-              Box {
-                Row(
-                  verticalAlignment = Alignment.CenterVertically,
-                  modifier =
-                    Modifier.fillMaxWidth()
-                      .heightIn(min = 54.dp)
-                      .clip(RoundedCornerShape(16.dp))
-                      .combinedClickable(
-                        onClick = { onAppClick(app) },
-                        onLongClick = { menuExpanded = true },
-                      )
-                      .padding(horizontal = 6.dp, vertical = 7.dp)
-                      .testTag("drawer_app_row_${app.packageName}"),
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier =
+                  Modifier.fillMaxWidth()
+                    .heightIn(min = 54.dp)
+                    .clip(RoundedCornerShape(16.dp))
+                    .combinedClickable(
+                      onClick = { onAppClick(app) },
+                      onLongClick = { selectedHoldApp = app },
+                    )
+                    .padding(horizontal = 6.dp, vertical = 7.dp)
+                    .testTag("drawer_app_row_${app.packageName}"),
+              ) {
+                Box(
+                  contentAlignment = Alignment.Center,
+                  modifier = Modifier.width(26.dp),
                 ) {
-                  Box(
-                    contentAlignment = Alignment.Center,
-                    modifier = Modifier.width(26.dp),
-                  ) {
-                    if (showLetterGutter) {
-                      Text(
-                        text = app.sectionLetter.toString(),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = SLauncherColors.AccentPrimary,
-                        textAlign = TextAlign.Center,
-                      )
-                    }
+                  if (showLetterGutter) {
+                    Text(
+                      text = app.sectionLetter.toString(),
+                      style = MaterialTheme.typography.labelLarge,
+                      color = SLauncherColors.AccentPrimary,
+                      textAlign = TextAlign.Center,
+                    )
                   }
-
-                  Spacer(modifier = Modifier.width(6.dp))
-                  AppIconImage(app = app, loadIcon = loadIcon, size = 38.dp)
-                  Spacer(modifier = Modifier.width(14.dp))
-
-                  Text(
-                    text = app.label,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = SLauncherColors.TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                  )
                 }
 
-                DropdownMenu(
-                  expanded = menuExpanded,
-                  onDismissRequest = { menuExpanded = false },
-                  modifier = Modifier.background(SLauncherColors.DarkGlassElevated),
-                ) {
-                  DropdownMenuItem(
-                    text = {
-                      Text(
-                        text = stringResource(R.string.action_app_info),
-                        color = SLauncherColors.TextPrimary,
-                      )
-                    },
-                    leadingIcon = {
-                      Icon(
-                        imageVector = Icons.Rounded.Info,
-                        contentDescription = null,
-                        tint = SLauncherColors.TextSecondary,
-                      )
-                    },
-                    onClick = {
-                      menuExpanded = false
-                      onOpenAppInfo(app)
-                    },
-                  )
-                }
+                Spacer(modifier = Modifier.width(6.dp))
+                AppIconImage(app = app, loadIcon = loadIcon, size = 38.dp)
+                Spacer(modifier = Modifier.width(14.dp))
+
+                Text(
+                  text = app.label,
+                  style = MaterialTheme.typography.titleMedium,
+                  color = SLauncherColors.TextPrimary,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                  modifier = Modifier.weight(1f),
+                )
               }
             }
           }
@@ -299,6 +270,17 @@ fun AppDrawerSheet(
                 .testTag("alphabet_index_rail"),
           )
         }
+      }
+
+      selectedHoldApp?.let { holdApp ->
+        AppHoldActionDialog(
+          app = holdApp,
+          loadIcon = loadIcon,
+          onOpenAppInfo = onOpenAppInfo,
+          onHideApp = onHideApp,
+          onUninstallApp = onUninstallApp,
+          onDismiss = { selectedHoldApp = null },
+        )
       }
     }
   }

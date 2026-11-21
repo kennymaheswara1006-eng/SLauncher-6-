@@ -44,7 +44,10 @@ import com.example.data.WallpaperChoice
 import com.example.data.WeatherRepository
 import com.example.notifications.DynamicNotificationItem
 import com.example.notifications.DynamicNotificationStore
+import com.example.notifications.FloatingDynamicOverlayController
+import com.example.notifications.ForegroundActivityTracker
 import com.example.quicksettings.SystemQuickSettingsHelper
+import com.example.shizuku.SystemControlRepository
 import com.example.ui.LauncherViewModel
 import com.example.ui.components.AppDrawerSheet
 import com.example.ui.components.BootWelcomeScreen
@@ -52,6 +55,7 @@ import com.example.ui.components.HiddenAppsDialog
 import com.example.ui.components.HomeScreen
 import com.example.ui.components.MusicLyricsDialog
 import com.example.ui.components.PermissionsDialog
+import com.example.ui.components.QuickSettingsSheet
 import com.example.ui.components.SettingsScreen
 import com.example.ui.components.WallpaperBackdrop
 import com.example.ui.theme.SLauncher6Theme
@@ -59,11 +63,12 @@ import com.example.ui.theme.SLauncher6Theme
 /**
  * Entry point for SLauncher 6.
  * Supports:
- * - Wallpaper backdrop (3 curated photos or transparent system live wallpaper)
- * - Guided runtime & system permissions setup (POST_NOTIFICATIONS, Notification Access, Default Home)
+ * - Wallpaper backdrop (9 curated photos, custom photos, or transparent system live wallpaper)
+ * - Guided runtime & system permissions setup (POST_NOTIFICATIONS, Notification Access, Overlay, Shizuku, Default Home)
  * - Dynamic localization following in-app Language setting
- * - Dynamic 3-second Welcome Pop-Up & Live Dynamic Notifications
- * - Full-screen Home app grid/list + A–Z App Drawer + Settings hub + Native Lock Screen
+ * - Dynamic 3-second Welcome Pop-Up & Universal Floating Dynamic Notifications
+ * - Shizuku-backed Custom Quick Settings Control Center + Native Biometric Lock Screen
+ * - Full-screen Home app grid/list + A–Z App Drawer + Settings hub
  */
 class MainActivity : ComponentActivity() {
 
@@ -72,6 +77,7 @@ class MainActivity : ComponentActivity() {
       AppRepository(applicationContext),
       WeatherRepository(applicationContext),
       MusicRepository(applicationContext),
+      SystemControlRepository(applicationContext),
     )
   }
 
@@ -128,6 +134,8 @@ class MainActivity : ComponentActivity() {
           postNotificationsGranted = postNotifGranted,
           notificationAccessGranted =
             DynamicNotificationStore.isNotificationAccessGranted(applicationContext),
+          overlayPermissionGranted =
+            FloatingDynamicOverlayController.canDrawOverlays(applicationContext),
           locationGranted = locationGranted,
         )
       }
@@ -193,9 +201,16 @@ class MainActivity : ComponentActivity() {
         registerReceiver(packageReceiver, filter)
 
         val observer = LifecycleEventObserver { _, event ->
-          if (event == Lifecycle.Event.ON_RESUME) {
-            refreshAllPermissions()
-            viewModel.onLauncherResumed()
+          when (event) {
+            Lifecycle.Event.ON_RESUME -> {
+              ForegroundActivityTracker.onActivityResumed()
+              refreshAllPermissions()
+              viewModel.onLauncherResumed()
+            }
+            Lifecycle.Event.ON_PAUSE -> {
+              ForegroundActivityTracker.onActivityPaused()
+            }
+            else -> Unit
           }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -233,6 +248,7 @@ class MainActivity : ComponentActivity() {
           uiState.isPermissionsDialogOpen -> viewModel.closePermissionsDialog()
           uiState.musicState.isFullLyricsSheetOpen -> viewModel.closeFullLyricsSheet()
           uiState.isHiddenAppsDialogOpen -> viewModel.closeHiddenAppsDialog()
+          uiState.isQuickSettingsOpen -> viewModel.closeQuickSettings()
           uiState.isSettingsOpen -> viewModel.closeSettings()
           uiState.isDrawerOpen -> viewModel.closeDrawer()
           uiState.searchQuery.isNotEmpty() -> viewModel.clearSearch()
@@ -259,6 +275,28 @@ class MainActivity : ComponentActivity() {
         }
       }
 
+      val handleHideApp: (AppModel) -> Unit = { app ->
+        viewModel.hideApp(app)
+        val hasCode = uiState.settings.hiddenAppsCode.trim().isNotEmpty()
+        val msg =
+          localizedContext.getString(
+            if (hasCode) R.string.app_hold_hidden_toast_with_code
+            else R.string.app_hold_hidden_toast_no_code,
+            app.label,
+          )
+        Toast.makeText(localizedContext, msg, Toast.LENGTH_LONG).show()
+      }
+
+      val handleUnhideApp: (AppModel) -> Unit = { app ->
+        viewModel.unhideApp(app)
+        Toast.makeText(
+            localizedContext,
+            localizedContext.getString(R.string.app_hold_unhidden_toast, app.label),
+            Toast.LENGTH_SHORT,
+          )
+          .show()
+      }
+
       CompositionLocalProvider(LocalContext provides localizedContext) {
         SLauncher6Theme {
           Box(modifier = Modifier.fillMaxSize()) {
@@ -274,14 +312,15 @@ class MainActivity : ComponentActivity() {
               loadIcon = viewModel::loadIcon,
               onLaunchApp = handleLaunchApp,
               onOpenAppInfo = viewModel::openAppInfo,
+              onHideApp = handleHideApp,
+              onUnhideApp = handleUnhideApp,
+              onUninstallApp = viewModel::uninstallApp,
               onSearchQueryChange = viewModel::onSearchQueryChange,
               onClearSearch = viewModel::clearSearch,
               onOpenDrawer = viewModel::openDrawer,
-              onOpenQuickSettings = {
-                SystemQuickSettingsHelper.expandSystemQuickSettings(this@MainActivity)
-              },
+              onOpenQuickSettings = viewModel::openQuickSettings,
               onOpenSettings = viewModel::openSettings,
-              onPreviewLockScreen = { openLockScreen() },
+              onPreviewLockScreen = { viewModel.triggerLockDevice { openLockScreen() } },
               onRequestLocationPermission = requestLocationPermission,
               onRefreshWeather = { viewModel.refreshWeather(forceRefresh = true) },
               onRequestNotificationAccess = {
@@ -299,6 +338,27 @@ class MainActivity : ComponentActivity() {
               onSetDefaultHome = viewModel::openDefaultHomeSettings,
             )
 
+            QuickSettingsSheet(
+              visible = uiState.isQuickSettingsOpen,
+              state = uiState.quickSettingsState,
+              onToggleWifi = viewModel::toggleWifi,
+              onToggleMobileData = viewModel::toggleMobileData,
+              onToggleBluetooth = viewModel::toggleBluetooth,
+              onToggleFlashlight = viewModel::toggleFlashlight,
+              onToggleDarkMode = viewModel::toggleDarkMode,
+              onToggleAutoRotate = viewModel::toggleAutoRotate,
+              onBrightnessChange = viewModel::setScreenBrightness,
+              onVolumeChange = viewModel::setMediaVolumePercent,
+              onConnectShizuku = { viewModel.connectShizuku(this@MainActivity) },
+              onLockScreen = { viewModel.triggerLockDevice { openLockScreen() } },
+              onOpenSettings = viewModel::openSettings,
+              onOpenSystemQuickSettings = {
+                viewModel.closeQuickSettings()
+                SystemQuickSettingsHelper.expandSystemQuickSettings(this@MainActivity)
+              },
+              onClose = viewModel::closeQuickSettings,
+            )
+
             AppDrawerSheet(
               visible = uiState.isDrawerOpen,
               allApps = uiState.allApps,
@@ -306,6 +366,8 @@ class MainActivity : ComponentActivity() {
               loadIcon = viewModel::loadIcon,
               onAppClick = handleLaunchApp,
               onOpenAppInfo = viewModel::openAppInfo,
+              onHideApp = handleHideApp,
+              onUninstallApp = viewModel::uninstallApp,
               onOpenSettings = viewModel::openSettings,
               onClose = viewModel::closeDrawer,
             )
@@ -313,9 +375,11 @@ class MainActivity : ComponentActivity() {
             SettingsScreen(
               visible = uiState.isSettingsOpen,
               settings = uiState.settings,
+              shizukuState = uiState.quickSettingsState.shizukuState,
               isPostNotificationsGranted = uiState.isPostNotificationsGranted,
               isLocationGranted = uiState.isLocationGranted,
               isNotificationAccessGranted = uiState.isNotificationAccessGranted,
+              isOverlayPermissionGranted = uiState.isOverlayPermissionGranted,
               isDefaultHome = uiState.isDefaultHome,
               onSelectLanguage = viewModel::setLanguage,
               onSelectWallpaper = viewModel::setWallpaperChoice,
@@ -349,21 +413,58 @@ class MainActivity : ComponentActivity() {
                 viewModel.setLockScreenEnabled(enabled)
                 (application as? SLauncherApp)?.syncLockScreenReceiver()
               },
+              onToggleBiometricUnlock = viewModel::setBiometricUnlockEnabled,
+              onToggleBiometricAutoPrompt = viewModel::setBiometricAutoPrompt,
+              onToggleShizukuRealLock = viewModel::setShizukuRealLockEnabled,
               onPreviewLockScreen = { openLockScreen() },
               onOpenSecuritySettings = viewModel::openSystemSecuritySettings,
               onToggleDynamicNotifications = viewModel::setDynamicNotificationsEnabled,
+              onToggleFloatingOverlayPopup = viewModel::setFloatingOverlayPopupEnabled,
+              onToggleSuppressSystemHeadsUp = { suppress ->
+                viewModel.setSuppressSystemHeadsUp(suppress) { ok ->
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(
+                        if (ok) R.string.shizuku_headsup_updated
+                        else R.string.shizuku_autogrant_need_conn
+                      ),
+                      Toast.LENGTH_SHORT,
+                    )
+                    .show()
+                }
+              },
               onRequestNotificationAccess = {
                 DynamicNotificationStore.openNotificationAccessSettings(this@MainActivity)
               },
+              onRequestOverlayPermission = {
+                FloatingDynamicOverlayController.openOverlayPermissionSettings(this@MainActivity)
+              },
               onTestDynamicNotification = {
+                viewModel.closeSettings()
                 DynamicNotificationStore.triggerPreviewNotification(
                   title = localizedContext.getString(R.string.dynamic_notif_test_title),
                   body = localizedContext.getString(R.string.dynamic_notif_test_body),
                   appName = localizedContext.getString(R.string.app_name),
                 )
               },
+              onConnectShizuku = { viewModel.connectShizuku(this@MainActivity) },
+              onAutoGrantViaShizuku = {
+                viewModel.autoGrantPrivilegesViaShizuku { ok ->
+                  refreshAllPermissions()
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(
+                        if (ok) R.string.shizuku_autogrant_success
+                        else R.string.shizuku_autogrant_need_conn
+                      ),
+                      Toast.LENGTH_SHORT,
+                    )
+                    .show()
+                }
+              },
               onToggleAppIconSettingsOnly = viewModel::setAppIconOpensSettingsOnly,
               onToggleBootWelcome = viewModel::setBootWelcomeEnabled,
+              onHiddenAppsCodeChange = viewModel::setHiddenAppsCode,
               onOpenHiddenAppsEditor = viewModel::openHiddenAppsDialog,
               onOpenPermissionsDialog = viewModel::openPermissionsDialog,
               onSetDefaultHome = viewModel::openDefaultHomeSettings,
@@ -396,12 +497,18 @@ class MainActivity : ComponentActivity() {
                 isPostNotificationsGranted = uiState.isPostNotificationsGranted,
                 isLocationGranted = uiState.isLocationGranted,
                 isNotificationAccessGranted = uiState.isNotificationAccessGranted,
+                isOverlayPermissionGranted = uiState.isOverlayPermissionGranted,
+                shizukuState = uiState.quickSettingsState.shizukuState,
                 isDefaultHome = uiState.isDefaultHome,
                 onRequestPostNotifications = requestPostNotificationsPermission,
                 onRequestLocation = requestLocationPermission,
                 onRequestNotificationAccess = {
                   DynamicNotificationStore.openNotificationAccessSettings(this@MainActivity)
                 },
+                onRequestOverlayPermission = {
+                  FloatingDynamicOverlayController.openOverlayPermissionSettings(this@MainActivity)
+                },
+                onConnectShizuku = { viewModel.connectShizuku(this@MainActivity) },
                 onRequestDefaultHome = viewModel::openDefaultHomeSettings,
                 onDismiss = { viewModel.closePermissionsDialog(markPromptShown = true) },
               )
@@ -438,6 +545,7 @@ class MainActivity : ComponentActivity() {
       viewModel.closePermissionsDialog(markPromptShown = true)
       viewModel.closeHiddenAppsDialog()
       viewModel.closeFullLyricsSheet()
+      viewModel.closeQuickSettings()
       viewModel.closeSettings()
       viewModel.closeDrawer()
       viewModel.clearSearch()

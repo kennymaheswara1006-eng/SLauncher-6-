@@ -5,6 +5,7 @@ import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -75,11 +76,16 @@ class AppRepository(context: Context) {
           val activityInfo = resolveInfo.activityInfo
           val rawLabel = resolveInfo.loadLabel(packageManager)?.toString()?.trim().orEmpty()
           val safeLabel = rawLabel.ifEmpty { activityInfo.packageName }
+          val appFlags = activityInfo.applicationInfo?.flags ?: 0
+          val isPureSystemApp =
+            (appFlags and ApplicationInfo.FLAG_SYSTEM) != 0 &&
+              (appFlags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) == 0
           AppModel(
             packageName = activityInfo.packageName,
             activityName = activityInfo.name,
             label = safeLabel,
             sectionLetter = normalizeSectionLetter(safeLabel),
+            canUninstall = activityInfo.packageName != selfPackageName && !isPureSystemApp,
           )
         }
         .distinctBy { it.componentKey }
@@ -177,7 +183,12 @@ class AppRepository(context: Context) {
       welcomePopupEnabled = prefs.getBoolean(KEY_WELCOME_ENABLED, true),
       customWelcomeText = prefs.getString(KEY_WELCOME_TEXT, "").orEmpty(),
       lockScreenEnabled = prefs.getBoolean(KEY_LOCKSCREEN_ENABLED, false),
+      biometricUnlockEnabled = prefs.getBoolean(KEY_BIOMETRIC_UNLOCK_ENABLED, true),
+      biometricAutoPrompt = prefs.getBoolean(KEY_BIOMETRIC_AUTO_PROMPT, true),
+      shizukuRealLockEnabled = prefs.getBoolean(KEY_SHIZUKU_REAL_LOCK_ENABLED, false),
       dynamicNotificationsEnabled = prefs.getBoolean(KEY_DYNAMIC_NOTIF_ENABLED, true),
+      floatingOverlayPopupEnabled = prefs.getBoolean(KEY_FLOATING_OVERLAY_POPUP_ENABLED, true),
+      suppressSystemHeadsUp = prefs.getBoolean(KEY_SUPPRESS_SYSTEM_HEADS_UP, false),
       appIconOpensSettingsOnly = prefs.getBoolean(KEY_APP_ICON_SETTINGS_ONLY, true),
       bootWelcomeEnabled = prefs.getBoolean(KEY_BOOT_WELCOME_ENABLED, true),
       permissionsPromptShown = prefs.getBoolean(KEY_PERMISSIONS_PROMPT_SHOWN, false),
@@ -187,6 +198,7 @@ class AppRepository(context: Context) {
           .split(DELIMITER)
           .filter { it.isNotBlank() }
           .toSet(),
+      hiddenAppsCode = prefs.getString(KEY_HIDDEN_APPS_CODE, "").orEmpty(),
     )
   }
 
@@ -201,11 +213,17 @@ class AppRepository(context: Context) {
       .putBoolean(KEY_WELCOME_ENABLED, settings.welcomePopupEnabled)
       .putString(KEY_WELCOME_TEXT, settings.customWelcomeText)
       .putBoolean(KEY_LOCKSCREEN_ENABLED, settings.lockScreenEnabled)
+      .putBoolean(KEY_BIOMETRIC_UNLOCK_ENABLED, settings.biometricUnlockEnabled)
+      .putBoolean(KEY_BIOMETRIC_AUTO_PROMPT, settings.biometricAutoPrompt)
+      .putBoolean(KEY_SHIZUKU_REAL_LOCK_ENABLED, settings.shizukuRealLockEnabled)
       .putBoolean(KEY_DYNAMIC_NOTIF_ENABLED, settings.dynamicNotificationsEnabled)
+      .putBoolean(KEY_FLOATING_OVERLAY_POPUP_ENABLED, settings.floatingOverlayPopupEnabled)
+      .putBoolean(KEY_SUPPRESS_SYSTEM_HEADS_UP, settings.suppressSystemHeadsUp)
       .putBoolean(KEY_APP_ICON_SETTINGS_ONLY, settings.appIconOpensSettingsOnly)
       .putBoolean(KEY_BOOT_WELCOME_ENABLED, settings.bootWelcomeEnabled)
       .putBoolean(KEY_PERMISSIONS_PROMPT_SHOWN, settings.permissionsPromptShown)
       .putString(KEY_HIDDEN_COMPONENTS, settings.hiddenComponentKeys.joinToString(DELIMITER))
+      .putString(KEY_HIDDEN_APPS_CODE, settings.hiddenAppsCode)
       .apply()
   }
 
@@ -232,8 +250,10 @@ class AppRepository(context: Context) {
   }
 
   /**
-   * Imports a user-chosen photo from Android Photo Picker into app-private storage,
-   * downscaled cleanly to <= 1600px on the longest edge so 2GB RAM devices never OOM.
+   * Imports a user-chosen photo from Android Photo Picker into app-private storage.
+   * Photos <= 3840px in standard formats (JPEG/PNG/WEBP) are stream-copied bit-for-bit so HD/4K
+   * sharpness is never degraded; larger photos (e.g. 50MP camera shots) are cleanly downscaled to
+   * <= 3840px in ARGB_8888 and saved at 97% quality.
    */
   suspend fun importCustomWallpaper(uri: Uri): String? =
     withContext(Dispatchers.IO) {
@@ -241,10 +261,46 @@ class AppRepository(context: Context) {
         val dir = File(appContext.filesDir, CUSTOM_WALLPAPER_DIR)
         if (!dir.exists()) dir.mkdirs()
 
-        val decodedBitmap = decodeScaledBitmapFromUri(uri, maxDimension = 1600) ?: return@withContext null
-        val outFile = File(dir, "wp_${System.currentTimeMillis()}.jpg")
+        val resolver = appContext.contentResolver
+        val mimeType = resolver.getType(uri)?.lowercase().orEmpty()
+        val boundsOpts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        resolver.openInputStream(uri)?.use { stream ->
+          BitmapFactory.decodeStream(stream, null, boundsOpts)
+        }
+        val longest = max(boundsOpts.outWidth, boundsOpts.outHeight)
+        val rawExtension =
+          when (mimeType) {
+            "image/png" -> "png"
+            "image/webp" -> "webp"
+            "image/jpeg", "image/jpg" -> "jpg"
+            else -> null
+          }
+
+        if (rawExtension != null && longest in 1..MAX_CUSTOM_WALLPAPER_DIMENSION) {
+          val rawOutFile = File(dir, "wp_${System.currentTimeMillis()}.$rawExtension")
+          val copied =
+            resolver.openInputStream(uri)?.use { input ->
+              FileOutputStream(rawOutFile).use { output -> input.copyTo(output) }
+              true
+            } ?: false
+          if (copied && rawOutFile.length() > 0L) {
+            return@withContext rawOutFile.absolutePath
+          }
+          rawOutFile.delete()
+        }
+
+        val decodedBitmap =
+          decodeScaledBitmapFromUri(uri, maxDimension = MAX_CUSTOM_WALLPAPER_DIMENSION)
+            ?: return@withContext null
+        val usePng = decodedBitmap.hasAlpha() || mimeType == "image/png"
+        val outFile =
+          File(dir, "wp_${System.currentTimeMillis()}.${if (usePng) "png" else "jpg"}")
         FileOutputStream(outFile).use { stream ->
-          decodedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, stream)
+          if (usePng) {
+            decodedBitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+          } else {
+            decodedBitmap.compress(Bitmap.CompressFormat.JPEG, 97, stream)
+          }
         }
         decodedBitmap.recycle()
         outFile.absolutePath
@@ -292,10 +348,33 @@ class AppRepository(context: Context) {
     while (longest / sampleSize > maxDimension * 2) {
       sampleSize *= 2
     }
-    val decodeOpts = BitmapFactory.Options().apply { inSampleSize = sampleSize }
-    return appContext.contentResolver.openInputStream(uri)?.use { stream ->
-      BitmapFactory.decodeStream(stream, null, decodeOpts)
+    val decodeOpts =
+      BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inScaled = false
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+      }
+    val decoded =
+      appContext.contentResolver.openInputStream(uri)?.use { stream ->
+        BitmapFactory.decodeStream(stream, null, decodeOpts)
+      } ?: return null
+
+    val decodedLongest = max(decoded.width, decoded.height)
+    if (decodedLongest <= maxDimension || decodedLongest <= 0) {
+      return decoded
     }
+    val scale = maxDimension.toFloat() / decodedLongest.toFloat()
+    val scaled =
+      Bitmap.createScaledBitmap(
+        decoded,
+        (decoded.width * scale).roundToInt().coerceAtLeast(1),
+        (decoded.height * scale).roundToInt().coerceAtLeast(1),
+        true,
+      )
+    if (scaled !== decoded) {
+      decoded.recycle()
+    }
+    return scaled
   }
 
   suspend fun applySystemWallpaper(choice: WallpaperChoice, customPath: String? = null): Boolean =
@@ -394,6 +473,20 @@ class AppRepository(context: Context) {
     }
   }
 
+  fun uninstallApp(packageName: String) {
+    if (packageName == selfPackageName) return
+    try {
+      val intent =
+        Intent(Intent.ACTION_DELETE).apply {
+          data = Uri.fromParts("package", packageName, null)
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+      appContext.startActivity(intent)
+    } catch (_: Exception) {
+      openAppInfo(packageName)
+    }
+  }
+
   fun openDefaultHomeSettings() {
     try {
       val intent =
@@ -485,17 +578,24 @@ class AppRepository(context: Context) {
     const val KEY_WELCOME_ENABLED = "pref_welcome_enabled"
     private const val KEY_WELCOME_TEXT = "pref_welcome_text"
     const val KEY_LOCKSCREEN_ENABLED = "pref_lockscreen_enabled"
+    const val KEY_BIOMETRIC_UNLOCK_ENABLED = "pref_biometric_unlock_enabled"
+    const val KEY_BIOMETRIC_AUTO_PROMPT = "pref_biometric_auto_prompt"
+    const val KEY_SHIZUKU_REAL_LOCK_ENABLED = "pref_shizuku_real_lock_enabled"
     const val KEY_DYNAMIC_NOTIF_ENABLED = "pref_dynamic_notif_enabled"
+    const val KEY_FLOATING_OVERLAY_POPUP_ENABLED = "pref_floating_overlay_popup_enabled"
+    const val KEY_SUPPRESS_SYSTEM_HEADS_UP = "pref_suppress_system_heads_up"
     private const val KEY_APP_ICON_SETTINGS_ONLY = "pref_app_icon_settings_only"
     private const val KEY_BOOT_WELCOME_ENABLED = "pref_boot_welcome_enabled"
     private const val KEY_PENDING_BOOT_WELCOME = "pref_pending_boot_welcome"
     private const val KEY_PERMISSIONS_PROMPT_SHOWN = "pref_permissions_prompt_shown"
     private const val KEY_HIDDEN_COMPONENTS = "pref_hidden_components"
+    private const val KEY_HIDDEN_APPS_CODE = "pref_hidden_apps_code"
     private const val KEY_SYNCED_SYSTEM_WALLPAPER = "pref_synced_system_wallpaper"
 
     private const val DELIMITER = "|"
     private const val DEFAULT_ICON_PX = 108
     private const val DEFAULT_SEED_COUNT = 5
+    private const val MAX_CUSTOM_WALLPAPER_DIMENSION = 3840
     const val MAX_FAVORITES = 7
   }
 }

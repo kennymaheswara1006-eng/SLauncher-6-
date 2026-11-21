@@ -27,13 +27,16 @@
     <string name="action_pin">Sematkan</string>
     <string name="action_unpin">Lepas</string>
     <string name="action_app_info">Info aplikasi</string>
+    <string name="action_hide_app">Sembunyikan</string>
+    <string name="action_unhide_app">Tampilkan</string>
+    <string name="action_uninstall_app">Hapus</string>
     <string name="action_open">Buka</string>
     <string name="action_dismiss">Tutup</string>
     <string name="battery_charging_format">%1$d%% ⚡</string>
     <string name="battery_format">%1$d%%</string>
     <string name="launch_error">Tidak dapat membuka %1$s</string>
     <string name="pinned_badge">Disematkan</string>
-    <string name="drawer_hint_long_press">Tekan lama aplikasi untuk sematkan atau info</string>
+    <string name="drawer_hint_long_press">Tekan lama aplikasi untuk info, sembunyikan, atau hapus</string>
 
     <!-- Welcome & Dynamic Notifications -->
     <string name="default_welcome_message">Halo Selamat Datang</string>
@@ -135,10 +138,18 @@
     <string name="weather_thunderstorm">Hujan Badai</string>
     <string name="cd_weather_icon">Cuaca saat ini: %1$s</string>
 
-    <!-- Hide Apps -->
+    <!-- Hide Apps & Kode Rahasia -->
     <string name="settings_hide_apps_btn">Sembunyikan Aplikasi (%1$d disembunyikan)</string>
+    <string name="settings_hidden_code_label">Kode rahasia aplikasi tersembunyi</string>
+    <string name="settings_hidden_code_hint">Contoh: #1234 atau rahasia</string>
+    <string name="settings_hidden_code_desc">Ketik kode ini di Pencarian Beranda untuk membuka aplikasi yang disembunyikan</string>
     <string name="hide_apps_dialog_title">Sembunyikan Aplikasi</string>
     <string name="hide_apps_dialog_subtitle">Pilih aplikasi yang ingin disembunyikan dari Beranda, Laci Aplikasi, dan pencarian</string>
+    <string name="app_hold_hidden_toast_with_code">%1$s disembunyikan. Ketik kode rahasia di pencarian untuk membuka</string>
+    <string name="app_hold_hidden_toast_no_code">%1$s disembunyikan. Atur kode rahasia di Pengaturan untuk membukanya</string>
+    <string name="app_hold_unhidden_toast">%1$s ditampilkan kembali ke Beranda</string>
+    <string name="secret_vault_title">Aplikasi Tersembunyi</string>
+    <string name="secret_vault_empty">Belum ada aplikasi tersembunyi. Tahan ikon aplikasi lalu pilih Sembunyikan.</string>
 
     <!-- Polished Notifications -->
     <string name="lockscreen_notifications_header">Notifikasi (%1$d)</string>
@@ -186,4 +197,52 @@
     <string name="boot_logo_mark">S6</string>
     <string name="boot_brand_name">SLauncher 6</string>
     <string name="home_set_default_pill">Jadikan Beranda</string>
+
+    <!-- Shizuku Quick Settings & Kontrol Sistem -->
+    <string name="shizuku_status_connected">Shizuku Aktif • ADB Shell</string>
+    <string name="shizuku_status_connecting">Menghubungkan Shizuku…</string>
+    <string name="shizuku_status_needs_perm">Izinkan Shizuku • Ketuk</string>
+    <string name="shizuku_status_not_running">Shizuku Belum Jalan • Ketuk</string>
+    <string name="shizuku_status_not_installed">Pasang Shizuku untuk Kontrol Penuh</string>
+    <string name="qs_wifi">Wi-Fi</string>
+    <string name="qs_mobile_data">Data Seluler</string>
+    <string name="qs_bluetooth">Bluetooth</string>
+    <string name="qs_flashlight">Senter</string>
+    <string name="qs_dark_mode">Mode Gelap</string>
+    <string name="qs_auto_rotate">Putar Otomatis</string>
+    <string name="qs_brightness">Kecerahan</string>
+    <string name="qs_media_volume">Volume Media</string>
+    <string name="qs_action_lock">Kunci</string>
+    <string name="qs_action_settings">Pengaturan</string>
+    <string name="qs_action_system">QS Sistem</string>
+
+    <!-- Lock Screen Sidik Jari Biometrik -->
+    <string name="lockscreen_biometric_prompt">Sentuh sidik jari untuk membuka</string>
+    <string name="lockscreen_biometric_failed">Sidik jari tidak cocok, coba lagi</string>
+    <string name="lockscreen_biometric_dialog_title">Buka SLauncher 6</string>
+    <string name="lockscreen_biometric_dialog_subtitle">Verifikasi menggunakan sidik jari Anda</string>
+    <string name="lockscreen_biometric_fallback_btn">Gunakan Usap</string>
+    <string name="settings_lockscreen_biometric_toggle">Kunci Biometrik Sidik Jari</string>
+    <string name="settings_lockscreen_biometric_desc">Gunakan sensor sidik jari perangkat di Lock Screen kustom SLauncher 6</string>
+    <string name="settings_lockscreen_biometric_auto_toggle">Tampilkan sidik jari otomatis</string>
+    <string name="settings_lockscreen_biometric_auto_desc">Otomatis memunculkan dialog sidik jari saat Lock Screen terbuka</string>
+    <string name="settings_lockscreen_shizuku_real_toggle">Matikan layar asli via Shizuku</string>
+    <string name="settings_lockscreen_shizuku_real_desc">Mematikan layar fisik dengan Shizuku (KEYCODE_POWER) saat tombol Kunci ditekan</string>
+
+    <!-- Floating Dynamic Pop-Up & Izin Shizuku -->
+    <string name="perm_overlay_title">Dynamic Pop-Up Mengambang</string>
+    <string name="perm_overlay_desc">Agar kapsul notifikasi tetap muncul di atas WhatsApp, YouTube, &amp; semua aplikasi</string>
+    <string name="perm_shizuku_title">Jembatan Sistem Shizuku (Non-Root)</string>
+    <string name="perm_shizuku_desc">Mengaktifkan tombol Wi-Fi, Data, Bluetooth &amp; lainnya di Quick Settings kustom</string>
+    <string name="settings_notif_floating_toggle">Mengambang di atas semua aplikasi</string>
+    <string name="settings_notif_floating_desc">Tetap tampilkan kapsul Dynamic Pop-Up saat membuka aplikasi lain (tidak kembali ke UI normal)</string>
+    <string name="settings_notif_overlay_grant_btn">Izinkan Tampil di Atas Aplikasi</string>
+    <string name="settings_notif_suppress_headsup_toggle">Sembunyikan banner notifikasi bawaan</string>
+    <string name="settings_notif_suppress_headsup_desc">Gunakan Shizuku agar notifikasi pop-up bawaan sistem tidak menumpuk kapsul</string>
+    <string name="settings_section_shizuku">Shizuku &amp; Kontrol Non-Root</string>
+    <string name="settings_shizuku_connect_btn">Hubungkan / Buka Shizuku</string>
+    <string name="settings_shizuku_autogrant_btn">Aktifkan Izin Overlay &amp; Notifikasi via Shizuku</string>
+    <string name="shizuku_autogrant_success">Izin overlay &amp; notifikasi berhasil diaktifkan via Shizuku</string>
+    <string name="shizuku_autogrant_need_conn">Hubungkan Shizuku terlebih dahulu di aplikasi Shizuku</string>
+    <string name="shizuku_headsup_updated">Pengaturan banner bawaan diperbarui via Shizuku</string>
 </resources>

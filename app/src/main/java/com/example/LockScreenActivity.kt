@@ -7,11 +7,12 @@ import android.graphics.drawable.ColorDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -20,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.AppRepository
 import com.example.data.LocaleHelper
@@ -28,15 +31,21 @@ import com.example.data.WeatherRepository
 import com.example.data.WeatherUiState
 import com.example.notifications.DynamicNotificationItem
 import com.example.notifications.DynamicNotificationStore
+import com.example.notifications.ForegroundActivityTracker
+import com.example.ui.components.BiometricAvailability
 import com.example.ui.components.LockScreenContent
 import com.example.ui.theme.SLauncher6Theme
 import kotlinx.coroutines.launch
 
 /**
- * Native full-screen Lock Screen Activity using Android's showWhenLocked + turnScreenOn
- * without any floating overlay (SYSTEM_ALERT_WINDOW).
+ * Native full-screen Lock Screen Activity using Android's showWhenLocked + turnScreenOn,
+ * upgraded with hardware Fingerprint / BiometricPrompt authentication on FragmentActivity.
  */
-class LockScreenActivity : ComponentActivity() {
+class LockScreenActivity : FragmentActivity() {
+
+  private var biometricPrompt: BiometricPrompt? = null
+  private var pendingAfterAuth: (() -> Unit)? = null
+  private val biometricStatusHintState = mutableStateOf<String?>(null)
 
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
@@ -71,6 +80,24 @@ class LockScreenActivity : ComponentActivity() {
           window.setBackgroundDrawable(ColorDrawable(AndroidColor.parseColor("#090C14")))
         }
       }
+
+      val localizedContext =
+        remember(settings.language) {
+          LocaleHelper.localizedContext(this@LockScreenActivity, settings.language)
+        }
+
+      val biometricAvailability = remember { checkBiometricAvailability() }
+
+      LaunchedEffect(biometricAvailability, settings.biometricUnlockEnabled, settings.biometricAutoPrompt) {
+        if (
+          settings.biometricUnlockEnabled &&
+            settings.biometricAutoPrompt &&
+            biometricAvailability == BiometricAvailability.AVAILABLE
+        ) {
+          launchBiometricPrompt(localizedContext) { unlockAndFinish() }
+        }
+      }
+
       val notifications by DynamicNotificationStore.notifications.collectAsStateWithLifecycle()
       val isAccessGranted = remember {
         DynamicNotificationStore.isNotificationAccessGranted(applicationContext)
@@ -98,11 +125,6 @@ class LockScreenActivity : ComponentActivity() {
         }
       }
 
-      val localizedContext =
-        remember(settings.language) {
-          LocaleHelper.localizedContext(this@LockScreenActivity, settings.language)
-        }
-
       // Disable system Back button from bypassing the lock screen
       BackHandler(enabled = true) {}
 
@@ -113,6 +135,11 @@ class LockScreenActivity : ComponentActivity() {
             weatherState = weatherState,
             isNotificationAccessGranted = isAccessGranted,
             notifications = notifications,
+            biometricAvailability = biometricAvailability,
+            biometricStatusHint = biometricStatusHintState.value,
+            onRequestBiometricPrompt = {
+              launchBiometricPrompt(localizedContext) { unlockAndFinish() }
+            },
             onRequestLocationPermission = { unlockAndFinish() },
             onRefreshWeather = {
               if (weatherRepository.hasLocationPermission()) {
@@ -134,6 +161,85 @@ class LockScreenActivity : ComponentActivity() {
         }
       }
     }
+  }
+
+  override fun onResume() {
+    super.onResume()
+    ForegroundActivityTracker.onActivityResumed()
+  }
+
+  override fun onPause() {
+    ForegroundActivityTracker.onActivityPaused()
+    super.onPause()
+  }
+
+  private fun checkBiometricAvailability(): BiometricAvailability {
+    val manager = BiometricManager.from(this)
+    val result =
+      manager.canAuthenticate(
+        BiometricManager.Authenticators.BIOMETRIC_STRONG or
+          BiometricManager.Authenticators.BIOMETRIC_WEAK
+      )
+    return when (result) {
+      BiometricManager.BIOMETRIC_SUCCESS -> BiometricAvailability.AVAILABLE
+      BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricAvailability.NOT_ENROLLED
+      else -> BiometricAvailability.UNAVAILABLE
+    }
+  }
+
+  private fun launchBiometricPrompt(localizedContext: Context, onAuthenticated: () -> Unit) {
+    if (checkBiometricAvailability() != BiometricAvailability.AVAILABLE) return
+    pendingAfterAuth = onAuthenticated
+    biometricStatusHintState.value = null
+
+    val executor = ContextCompat.getMainExecutor(this)
+    val prompt =
+      BiometricPrompt(
+        this,
+        executor,
+        object : BiometricPrompt.AuthenticationCallback() {
+          override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+            super.onAuthenticationSucceeded(result)
+            biometricStatusHintState.value = null
+            val action = pendingAfterAuth
+            pendingAfterAuth = null
+            action?.invoke() ?: unlockAndFinish()
+          }
+
+          override fun onAuthenticationFailed() {
+            super.onAuthenticationFailed()
+            biometricStatusHintState.value =
+              localizedContext.getString(R.string.lockscreen_biometric_failed)
+          }
+
+          override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+            super.onAuthenticationError(errorCode, errString)
+            pendingAfterAuth = null
+            if (
+              errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON &&
+                errorCode != BiometricPrompt.ERROR_USER_CANCELED &&
+                errorCode != BiometricPrompt.ERROR_CANCELED
+            ) {
+              biometricStatusHintState.value = errString.toString()
+            }
+          }
+        },
+      )
+    biometricPrompt = prompt
+
+    val promptInfo =
+      BiometricPrompt.PromptInfo.Builder()
+        .setTitle(localizedContext.getString(R.string.lockscreen_biometric_dialog_title))
+        .setSubtitle(localizedContext.getString(R.string.lockscreen_biometric_dialog_subtitle))
+        .setNegativeButtonText(localizedContext.getString(R.string.lockscreen_biometric_fallback_btn))
+        .setAllowedAuthenticators(
+          BiometricManager.Authenticators.BIOMETRIC_STRONG or
+            BiometricManager.Authenticators.BIOMETRIC_WEAK
+        )
+        .setConfirmationRequired(false)
+        .build()
+
+    runCatching { prompt.authenticate(promptInfo) }
   }
 
   private fun openNotificationAfterUnlock(item: DynamicNotificationItem) {

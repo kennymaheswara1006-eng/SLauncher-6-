@@ -14,6 +14,7 @@ data class AppModel(
   val activityName: String,
   val label: String,
   val sectionLetter: Char,
+  val canUninstall: Boolean = true,
 ) {
   val componentKey: String
     get() = "$packageName/$activityName"
@@ -146,6 +147,24 @@ enum class WallpaperChoice(val key: String, @param:DrawableRes val drawableRes: 
 }
 
 /**
+ * Live state snapshot for SLauncher 6's custom Shizuku-backed Quick Settings Control Center.
+ */
+data class QuickSettingsState(
+  val wifiEnabled: Boolean = false,
+  val mobileDataEnabled: Boolean = false,
+  val bluetoothEnabled: Boolean = false,
+  val flashlightEnabled: Boolean = false,
+  val flashlightAvailable: Boolean = true,
+  val darkModeEnabled: Boolean = true,
+  val autoRotateEnabled: Boolean = false,
+  val brightnessLevel: Int = 140,
+  val mediaVolumePercent: Int = 60,
+  val shizukuState: com.example.shizuku.ShizukuConnectionState =
+    com.example.shizuku.ShizukuConnectionState.NOT_RUNNING,
+  val headsUpSuppressed: Boolean = false,
+)
+
+/**
  * Persistent user customization settings stored in lightweight SharedPreferences.
  */
 data class LauncherSettings(
@@ -157,11 +176,17 @@ data class LauncherSettings(
   val welcomePopupEnabled: Boolean = true,
   val customWelcomeText: String = "",
   val lockScreenEnabled: Boolean = false,
+  val biometricUnlockEnabled: Boolean = true,
+  val biometricAutoPrompt: Boolean = true,
+  val shizukuRealLockEnabled: Boolean = false,
   val dynamicNotificationsEnabled: Boolean = true,
+  val floatingOverlayPopupEnabled: Boolean = true,
+  val suppressSystemHeadsUp: Boolean = false,
   val appIconOpensSettingsOnly: Boolean = true,
   val bootWelcomeEnabled: Boolean = true,
   val permissionsPromptShown: Boolean = false,
   val hiddenComponentKeys: Set<String> = emptySet(),
+  val hiddenAppsCode: String = "",
 )
 
 /**
@@ -173,16 +198,20 @@ data class LauncherUiState(
   val allApps: List<AppModel> = emptyList(),
   val searchQuery: String = "",
   val searchResults: List<AppModel> = emptyList(),
+  val isSecretVaultMatched: Boolean = false,
   val alphabetIndexMap: Map<Char, Int> = emptyMap(),
   val availableLetters: List<Char> = emptyList(),
   val isDrawerOpen: Boolean = false,
+  val isQuickSettingsOpen: Boolean = false,
   val isHiddenAppsDialogOpen: Boolean = false,
   val isSettingsOpen: Boolean = false,
   val isPermissionsDialogOpen: Boolean = false,
   val isBootWelcomeVisible: Boolean = false,
   val settings: LauncherSettings = LauncherSettings(),
+  val quickSettingsState: QuickSettingsState = QuickSettingsState(),
   val isPostNotificationsGranted: Boolean = true,
   val isNotificationAccessGranted: Boolean = false,
+  val isOverlayPermissionGranted: Boolean = false,
   val isLocationGranted: Boolean = false,
   val isDefaultHome: Boolean = false,
   val weatherState: WeatherUiState = WeatherUiState.NeedsPermission,

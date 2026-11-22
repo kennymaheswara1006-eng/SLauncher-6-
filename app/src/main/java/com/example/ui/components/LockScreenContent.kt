@@ -255,14 +255,14 @@ fun LockScreenContent(
             .widthIn(max = 540.dp)
             .padding(horizontal = 24.dp, vertical = 14.dp),
       ) {
-        if (notifications.isNotEmpty() || (!isNotificationAccessGranted && settings.dynamicNotificationsEnabled)) {
+        if (!isNotificationAccessGranted && settings.dynamicNotificationsEnabled) {
           DynamicPopUpCapsule(
             welcomePopupEnabled = false,
             welcomeMessage = "",
             welcomeTriggerId = 0L,
-            dynamicNotificationsEnabled = settings.dynamicNotificationsEnabled,
-            isNotificationAccessGranted = isNotificationAccessGranted,
-            notifications = notifications,
+            dynamicNotificationsEnabled = true,
+            isNotificationAccessGranted = false,
+            notifications = emptyList(),
             onRequestNotificationAccess = onRequestNotificationAccess,
             onOpenNotification = onOpenNotification,
             onDismissNotification = onDismissNotification,

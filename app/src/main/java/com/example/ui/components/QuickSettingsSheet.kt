@@ -69,14 +69,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
+import com.example.adb.AdbConnectionState
 import com.example.data.QuickSettingsState
-import com.example.shizuku.ShizukuConnectionState
 import com.example.ui.theme.SLauncherColors
 import com.example.ui.theme.softDeepCapsule
 import kotlin.math.roundToInt
 
 /**
- * Custom Shizuku-backed Quick Settings Control Center styled with
+ * Custom Built-in ADB-backed Quick Settings Control Center styled with
  * Soft Modern Capsules and Deep Layered Shadows.
  * Recent Apps remains delegated to the Android system Recents.
  */
@@ -92,7 +92,7 @@ fun QuickSettingsSheet(
   onToggleAutoRotate: () -> Unit,
   onBrightnessChange: (Int) -> Unit,
   onVolumeChange: (Int) -> Unit,
-  onConnectShizuku: () -> Unit,
+  onConnectAdb: () -> Unit,
   onLockScreen: () -> Unit,
   onOpenSettings: () -> Unit,
   onOpenSystemQuickSettings: () -> Unit,
@@ -144,15 +144,15 @@ fun QuickSettingsSheet(
             .padding(horizontal = 18.dp, vertical = 18.dp)
             .testTag("custom_quick_settings_sheet"),
       ) {
-        // Header Row: Shizuku Connection Status Pill + Close
+        // Header Row: Built-in ADB Connection Status Pill + Close
         Row(
           verticalAlignment = Alignment.CenterVertically,
           horizontalArrangement = Arrangement.SpaceBetween,
           modifier = Modifier.fillMaxWidth(),
         ) {
-          ShizukuStatusCapsule(
-            state = state.shizukuState,
-            onClick = onConnectShizuku,
+          BuiltInAdbStatusCapsule(
+            state = state.adbState,
+            onClick = onConnectAdb,
             modifier = Modifier.weight(1f),
           )
 
@@ -322,25 +322,26 @@ fun QuickSettingsSheet(
 }
 
 @Composable
-private fun ShizukuStatusCapsule(
-  state: ShizukuConnectionState,
+private fun BuiltInAdbStatusCapsule(
+  state: AdbConnectionState,
   onClick: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val isConnected = state == ShizukuConnectionState.CONNECTED
+  val isConnected = state == AdbConnectionState.CONNECTED
   val dotColor =
     when (state) {
-      ShizukuConnectionState.CONNECTED -> SLauncherColors.SoftCapsuleEmerald
-      ShizukuConnectionState.CONNECTING -> SLauncherColors.AccentPrimary
+      AdbConnectionState.CONNECTED -> SLauncherColors.SoftCapsuleEmerald
+      AdbConnectionState.CONNECTING,
+      AdbConnectionState.AUTHORIZING -> SLauncherColors.AccentPrimary
       else -> SLauncherColors.WarningSoft
     }
   val statusText =
     when (state) {
-      ShizukuConnectionState.CONNECTED -> stringResource(R.string.shizuku_status_connected)
-      ShizukuConnectionState.CONNECTING -> stringResource(R.string.shizuku_status_connecting)
-      ShizukuConnectionState.NEEDS_PERMISSION -> stringResource(R.string.shizuku_status_needs_perm)
-      ShizukuConnectionState.NOT_RUNNING -> stringResource(R.string.shizuku_status_not_running)
-      ShizukuConnectionState.NOT_INSTALLED -> stringResource(R.string.shizuku_status_not_installed)
+      AdbConnectionState.CONNECTED -> stringResource(R.string.adb_status_connected)
+      AdbConnectionState.CONNECTING -> stringResource(R.string.adb_status_connecting)
+      AdbConnectionState.AUTHORIZING -> stringResource(R.string.adb_status_authorizing)
+      AdbConnectionState.DISABLED_IN_SETTINGS -> stringResource(R.string.adb_status_disabled)
+      AdbConnectionState.DISCONNECTED -> stringResource(R.string.adb_status_disconnected)
     }
 
   Row(
@@ -356,7 +357,7 @@ private fun ShizukuStatusCapsule(
         )
         .clickable(onClick = onClick)
         .padding(horizontal = 14.dp, vertical = 10.dp)
-        .testTag("qs_shizuku_status_pill"),
+        .testTag("qs_adb_status_pill"),
   ) {
     Box(modifier = Modifier.size(9.dp).clip(CircleShape).background(dotColor))
     Spacer(modifier = Modifier.width(8.dp))

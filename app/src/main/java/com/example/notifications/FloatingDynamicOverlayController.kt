@@ -135,14 +135,17 @@ class FloatingDynamicOverlayController(
     observerJob =
       scope.launch {
         combine(
-            DynamicNotificationStore.notifications,
+            DynamicNotificationStore.bannerNotification,
             DynamicNotificationStore.bannerTriggerId,
             ForegroundActivityTracker.isLauncherInForeground,
-          ) { notifications, triggerId, launcherForeground ->
-            Triple(notifications, triggerId, launcherForeground)
+          ) { bannerItem, triggerId, launcherForeground ->
+            Triple(bannerItem, triggerId, launcherForeground)
           }
-          .collect { (notifications, triggerId, launcherForeground) ->
+          .collect { (bannerItem, triggerId, launcherForeground) ->
             if (launcherForeground) {
+              activeFloatingItem.value?.let { shown ->
+                DynamicNotificationStore.clearBanner(shown.key)
+              }
               activeFloatingItem.value = null
               detachOverlay()
               lastShownBannerTriggerId = triggerId
@@ -151,14 +154,13 @@ class FloatingDynamicOverlayController(
 
             if (triggerId > lastShownBannerTriggerId) {
               lastShownBannerTriggerId = triggerId
-              val topItem = notifications.firstOrNull()
-              if (topItem != null && shouldShowFloatingOverlay()) {
-                activeFloatingItem.value = topItem
+              if (bannerItem != null && shouldShowFloatingOverlay()) {
+                activeFloatingItem.value = bannerItem
                 attachOverlayIfNeeded()
               }
             } else {
               val current = activeFloatingItem.value
-              if (current != null && notifications.none { it.key == current.key }) {
+              if (current != null && bannerItem == null) {
                 activeFloatingItem.value = null
                 detachOverlay()
               }
@@ -217,7 +219,10 @@ class FloatingDynamicOverlayController(
                   queuedCount = (allItems.size - 1).coerceAtLeast(0),
                   onOpen = {
                     runCatching { item.contentIntent?.send() }
-                    dismissFloatingItem(item.key, removeFromStore = false)
+                    autoHideFloatingItem(item.key)
+                  },
+                  onAutoHide = {
+                    autoHideFloatingItem(item.key)
                   },
                   onDismiss = {
                     dismissFloatingItem(item.key, removeFromStore = true)
@@ -261,10 +266,18 @@ class FloatingDynamicOverlayController(
     }
   }
 
+  private fun autoHideFloatingItem(key: String) {
+    DynamicNotificationStore.clearBanner(key)
+    activeFloatingItem.value = null
+    detachOverlay()
+  }
+
   private fun dismissFloatingItem(key: String, removeFromStore: Boolean) {
     if (removeFromStore) {
       onSystemDismiss(key)
       DynamicNotificationStore.remove(key)
+    } else {
+      DynamicNotificationStore.clearBanner(key)
     }
     activeFloatingItem.value = null
     detachOverlay()
@@ -314,6 +327,7 @@ private fun FloatingDynamicCapsuleOverlay(
   item: DynamicNotificationItem,
   queuedCount: Int,
   onOpen: () -> Unit,
+  onAutoHide: () -> Unit,
   onDismiss: () -> Unit,
 ) {
   val context = androidx.compose.ui.platform.LocalContext.current
@@ -323,7 +337,7 @@ private fun FloatingDynamicCapsuleOverlay(
   val timerRemaining = remember(item.key) { Animatable(1f) }
   val exitAnim = remember(item.key) { Animatable(0f) }
 
-  LaunchedEffect(item.key, isExpanded) {
+  LaunchedEffect(item.key, item.postTime, isExpanded) {
     if (!isExpanded) {
       timerRemaining.snapTo(1f)
       timerRemaining.animateTo(
@@ -331,7 +345,7 @@ private fun FloatingDynamicCapsuleOverlay(
         animationSpec = tween(durationMillis = 3200, easing = LinearEasing),
       )
       exitAnim.animateTo(1f, tween(durationMillis = 220, easing = FastOutSlowInEasing))
-      onDismiss()
+      onAutoHide()
     }
   }
 

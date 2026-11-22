@@ -6,6 +6,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.SLauncherApp
+import com.example.adb.AdbCommandResult
+import com.example.adb.AdbDiscoveryHelper
+import com.example.adb.LocalAdbBridge
+import com.example.adb.SystemControlRepository
 import com.example.data.AppLanguage
 import com.example.data.AppModel
 import com.example.data.AppRepository
@@ -21,9 +25,6 @@ import com.example.data.WeatherRepository
 import com.example.data.WeatherUiState
 import com.example.debug.DebugLogStore
 import com.example.notifications.DynamicNotificationStore
-import com.example.shizuku.ShizukuBridge
-import com.example.shizuku.ShizukuCommandResult
-import com.example.shizuku.SystemControlRepository
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +36,8 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel managing installed apps, hidden apps filtering, universal Music Player & Lyrics
  * (via MediaSessionManager), instant search filtering, A–Z section index mapping, wallpaper
- * selection, live weather, Shizuku-backed Quick Settings, permissions status, and persistent settings.
+ * selection, live weather, built-in USB/Wireless ADB Quick Settings, permissions status,
+ * and persistent settings.
  */
 class LauncherViewModel(
   private val repository: AppRepository,
@@ -81,17 +83,17 @@ class LauncherViewModel(
     refreshApps()
     refreshWeather(forceRefresh = false)
     observeMusicSessions()
-    observeShizukuStatus()
+    observeBuiltInAdbStatus()
     refreshQuickSettings()
     syncSelectedWallpaperIfNeeded(force = false)
   }
 
-  private fun observeShizukuStatus() {
+  private fun observeBuiltInAdbStatus() {
     viewModelScope.launch {
-      ShizukuBridge.connectionState.collect { connState ->
+      LocalAdbBridge.connectionState.collect { connState ->
         _uiState.update { state ->
           state.copy(
-            quickSettingsState = state.quickSettingsState.copy(shizukuState = connState)
+            quickSettingsState = state.quickSettingsState.copy(adbState = connState)
           )
         }
       }
@@ -172,6 +174,7 @@ class LauncherViewModel(
   override fun onCleared() {
     super.onCleared()
     musicRepository.stopObserving()
+    AdbDiscoveryHelper.stopWirelessDiscovery()
   }
 
   fun refreshApps() {
@@ -243,6 +246,7 @@ class LauncherViewModel(
   fun refreshPermissionStatuses(
     postNotificationsGranted: Boolean,
     notificationAccessGranted: Boolean,
+    notificationPolicyAccessGranted: Boolean,
     overlayPermissionGranted: Boolean,
     locationGranted: Boolean,
   ) {
@@ -251,12 +255,13 @@ class LauncherViewModel(
       it.copy(
         isPostNotificationsGranted = postNotificationsGranted,
         isNotificationAccessGranted = notificationAccessGranted,
+        isNotificationPolicyAccessGranted = notificationPolicyAccessGranted,
         isOverlayPermissionGranted = overlayPermissionGranted,
         isLocationGranted = locationGranted,
         isDefaultHome = repository.isDefaultHomeLauncher(),
       )
     }
-    ShizukuBridge.refreshStatus()
+    LocalAdbBridge.refreshStatus()
     musicRepository.startOrRefreshObserving()
     if (locationGranted && (!wasLocationGranted || _uiState.value.weatherState !is WeatherUiState.Ready)) {
       refreshWeather(forceRefresh = true)
@@ -482,14 +487,46 @@ class LauncherViewModel(
     }
   }
 
-  fun connectShizuku(context: Context) {
-    ShizukuBridge.requestPermissionOrOpenManager(context)
-    refreshQuickSettings()
+  fun connectBuiltInAdb(host: String, port: Int, onResult: (AdbCommandResult) -> Unit = {}) {
+    viewModelScope.launch {
+      val result = systemControlRepository.connectBuiltInAdb(host, port)
+      refreshQuickSettings()
+      val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
+      _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
+      onResult(result)
+    }
   }
 
-  fun autoGrantPrivilegesViaShizuku(onResult: (Boolean) -> Unit) {
+  fun autoConnectBuiltInAdb(onResult: (AdbCommandResult) -> Unit = {}) {
     viewModelScope.launch {
-      val ok = systemControlRepository.autoGrantPrivilegedPermissionsViaShizuku()
+      val result = systemControlRepository.autoConnectBuiltInAdb()
+      refreshQuickSettings()
+      val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
+      _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
+      onResult(result)
+    }
+  }
+
+  fun disconnectBuiltInAdb() {
+    viewModelScope.launch {
+      LocalAdbBridge.disconnect()
+      refreshQuickSettings()
+      val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
+      _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
+    }
+  }
+
+  fun startWirelessAdbScan(context: Context) {
+    AdbDiscoveryHelper.startWirelessDiscovery(context)
+  }
+
+  fun openDeveloperOptions(context: Context) {
+    AdbDiscoveryHelper.openDeveloperOptions(context)
+  }
+
+  fun autoGrantPrivilegesViaAdb(onResult: (Boolean) -> Unit) {
+    viewModelScope.launch {
+      val ok = systemControlRepository.autoGrantPrivilegedPermissionsViaAdb()
       refreshQuickSettings()
       onResult(ok)
     }
@@ -498,9 +535,9 @@ class LauncherViewModel(
   fun triggerLockDevice(openCustomLockActivity: () -> Unit) {
     val useRealLock = _uiState.value.settings.shizukuRealLockEnabled
     closeQuickSettings()
-    if (useRealLock && ShizukuBridge.isConnected()) {
+    if (useRealLock && LocalAdbBridge.isConnected()) {
       viewModelScope.launch {
-        val locked = systemControlRepository.lockScreenViaShizuku()
+        val locked = systemControlRepository.lockScreenViaAdb()
         if (!locked) openCustomLockActivity()
       }
     } else {
@@ -532,17 +569,7 @@ class LauncherViewModel(
     }
   }
 
-  fun forceRebindShizuku(onResult: (ShizukuCommandResult) -> Unit = {}) {
-    viewModelScope.launch {
-      val result = systemControlRepository.forceRebindShizuku()
-      refreshQuickSettings()
-      val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
-      _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
-      onResult(result)
-    }
-  }
-
-  fun runDebugShellCommand(command: String, onResult: (ShizukuCommandResult) -> Unit = {}) {
+  fun runDebugShellCommand(command: String, onResult: (AdbCommandResult) -> Unit = {}) {
     viewModelScope.launch {
       val result = systemControlRepository.runDebugShellCommand(command)
       val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
@@ -551,9 +578,9 @@ class LauncherViewModel(
     }
   }
 
-  fun attemptDisableSystemKeyguardViaShizuku(onResult: (ShizukuCommandResult) -> Unit = {}) {
+  fun attemptDisableSystemKeyguardViaAdb(onResult: (AdbCommandResult) -> Unit = {}) {
     viewModelScope.launch {
-      val result = systemControlRepository.attemptDisableSystemKeyguardViaShizuku()
+      val result = systemControlRepository.attemptDisableSystemKeyguardViaAdb()
       val snapshot = systemControlRepository.collectSystemDiagnostics(_uiState.value.isDefaultHome)
       _uiState.update { it.copy(diagnosticsSnapshot = snapshot) }
       onResult(result)

@@ -37,9 +37,12 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.DeleteSweep
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.LockOpen
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Radar
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -66,6 +69,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,40 +77,50 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
+import com.example.adb.AdbCommandResult
+import com.example.adb.AdbConnectionState
+import com.example.adb.AdbDiscoveryHelper
+import com.example.adb.LocalAdbBridge
 import com.example.debug.DebugLogStore
 import com.example.debug.SystemDiagnosticsSnapshot
-import com.example.shizuku.ShizukuCommandResult
-import com.example.shizuku.ShizukuConnectionState
 import com.example.ui.theme.SLauncherColors
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Built-in SLauncher 6 Debugging Console showing:
- * - Real-time health & diagnostic badges (Shizuku binder, API_V23 perm, UserService UID,
- *   Overlay, Notification Listener, Default Home, Biometric HW, Keyguard Secure / lockscreen.disabled)
- * - 1-tap Re-bind Shizuku & Anti Double-Lock diagnostic actions
- * - Interactive ADB/Shizuku shell command runner with quick preset commands
- * - Auto-scrolling monospace live log viewer with Copy & Clear
+ * Self-contained SLauncher 6 Built-in USB & Wireless ADB Debugging Console showing:
+ * - Real-time diagnostic pills (USB Debugging, Wireless Debugging, Built-in ADB Socket,
+ *   USB OTG ADB, Notification Policy / Heads-Up Suppression, Overlay, Listener, DefaultHome, Bio)
+ * - Direct Host + Port input & mDNS Wireless ADB auto-scanner (`_adb-tls-connect._tcp`)
+ * - Interactive built-in ADB shell command runner with presets
+ * - Live auto-scrolling monospace event log stream with Copy & Clear
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DebugConsoleDialog(
-  shizukuState: ShizukuConnectionState,
+  adbState: AdbConnectionState,
   diagnostics: SystemDiagnosticsSnapshot?,
   onRefreshDiagnostics: () -> Unit,
-  onRebindShizuku: ((ShizukuCommandResult) -> Unit) -> Unit,
-  onTestDisableKeyguard: ((ShizukuCommandResult) -> Unit) -> Unit,
-  onRunCommand: (String, (ShizukuCommandResult) -> Unit) -> Unit,
+  onConnectAdb: (String, Int, (AdbCommandResult) -> Unit) -> Unit,
+  onScanWirelessAdb: () -> Unit,
+  onOpenDeveloperOptions: () -> Unit,
+  onTestDisableKeyguard: ((AdbCommandResult) -> Unit) -> Unit,
+  onRunCommand: (String, (AdbCommandResult) -> Unit) -> Unit,
   onDismiss: () -> Unit,
 ) {
   val context = LocalContext.current
   val logs by DebugLogStore.logs.collectAsStateWithLifecycle()
+  val discoveredEndpoints by AdbDiscoveryHelper.discoveredEndpoints.collectAsStateWithLifecycle()
+  val isScanning by AdbDiscoveryHelper.isScanning.collectAsStateWithLifecycle()
+  val savedHost by LocalAdbBridge.targetHost.collectAsStateWithLifecycle()
+  val savedPort by LocalAdbBridge.targetPort.collectAsStateWithLifecycle()
   val logListState = rememberLazyListState()
 
+  var hostInput by remember(savedHost) { mutableStateOf(savedHost) }
+  var portInput by remember(savedPort) { mutableStateOf(savedPort.toString()) }
   var commandInput by remember { mutableStateOf("id") }
-  var lastCommandResult by remember { mutableStateOf<ShizukuCommandResult?>(null) }
+  var lastCommandResult by remember { mutableStateOf<AdbCommandResult?>(null) }
   var isRunning by remember { mutableStateOf(false) }
 
   LaunchedEffect(logs.size) {
@@ -138,11 +152,11 @@ fun DebugConsoleDialog(
           .navigationBarsPadding(),
     ) {
       Column(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
         modifier =
           Modifier.fillMaxSize()
             .widthIn(max = 620.dp)
-            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
             .testTag("debug_console_dialog"),
       ) {
         // Header
@@ -211,7 +225,7 @@ fun DebugConsoleDialog(
           }
         }
 
-        // System Status Diagnostic Pills
+        // System Status Diagnostic Pills + Built-in USB/Wireless ADB Connection Controls
         Column(
           verticalArrangement = Arrangement.spacedBy(8.dp),
           modifier =
@@ -222,7 +236,7 @@ fun DebugConsoleDialog(
               .padding(12.dp),
         ) {
           Text(
-            text = "${stringResource(R.string.debug_section_diagnostics)} • ${shizukuState.name}",
+            text = "${stringResource(R.string.debug_section_diagnostics)} • ${adbState.name}",
             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
             color = SLauncherColors.AccentPrimary,
           )
@@ -232,25 +246,23 @@ fun DebugConsoleDialog(
             verticalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth(),
           ) {
-            DiagnosticBadge("Installed", snap?.shizukuInstalled == true)
-            DiagnosticBadge("Binder", snap?.shizukuBinderAlive == true)
-            DiagnosticBadge("API_V23", snap?.shizukuPermissionGranted == true)
-            DiagnosticBadge("UserService", snap?.userServiceBound == true)
-            DiagnosticBadge("DefaultHome", snap?.isDefaultHome == true)
+            DiagnosticBadge("USB_DBG", snap?.usbDebuggingEnabled == true)
+            DiagnosticBadge("WIFI_DBG", snap?.wirelessDebuggingEnabled == true)
+            DiagnosticBadge("ADB_CONN", snap?.adbConnected == true)
+            DiagnosticBadge("HeadsUpOff", snap?.systemHeadsUpSuppressed == true)
+            DiagnosticBadge("DND_Policy", snap?.hasNotificationPolicyAccess == true)
             DiagnosticBadge("Overlay", snap?.hasOverlayPermission == true)
-            DiagnosticBadge("NotifListener", snap?.hasNotificationAccess == true)
+            DiagnosticBadge("Listener", snap?.hasNotificationAccess == true)
+            DiagnosticBadge("Home", snap?.isDefaultHome == true)
             DiagnosticBadge(
               "Bio:${snap?.biometricStatusLabel?.ifBlank { "?" } ?: "?"}",
               snap?.biometricStatusLabel == "READY",
             )
-            DiagnosticBadge(
-              if (snap?.systemKeyguardSecure == true) "SysLock:ON" else "SysLock:OFF",
-              snap?.systemKeyguardSecure == false,
-            )
           }
-          if (!snap?.userServiceUidOutput.isNullOrBlank()) {
+
+          if (snap != null) {
             Text(
-              text = "UID: ${snap?.userServiceUidOutput} • lockscreen.disabled=${snap?.systemLockscreenDisabledSetting}",
+              text = "IP: ${snap.localIpAddress} • USB-OTG: ${snap.usbOtgAdbCount} • UID: ${snap.adbShellUidOutput}",
               style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
               color = SLauncherColors.TextSecondary,
               maxLines = 2,
@@ -258,15 +270,91 @@ fun DebugConsoleDialog(
             )
           }
 
+          // Host & Port input row
           Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            OutlinedTextField(
+              value = hostInput,
+              onValueChange = { hostInput = it },
+              singleLine = true,
+              label = { Text(stringResource(R.string.settings_adb_host_label), fontSize = 11.sp) },
+              textStyle =
+                MaterialTheme.typography.bodySmall.copy(
+                  fontFamily = FontFamily.Monospace,
+                  color = SLauncherColors.TextPrimary,
+                ),
+              shape = RoundedCornerShape(12.dp),
+              colors =
+                OutlinedTextFieldDefaults.colors(
+                  focusedBorderColor = SLauncherColors.AccentPrimary,
+                  unfocusedBorderColor = SLauncherColors.GlassBorder,
+                  cursorColor = SLauncherColors.AccentPrimary,
+                ),
+              modifier = Modifier.weight(1.6f).testTag("debug_adb_host_input"),
+            )
+            OutlinedTextField(
+              value = portInput,
+              onValueChange = { raw -> portInput = raw.filter { it.isDigit() }.take(5) },
+              singleLine = true,
+              label = { Text(stringResource(R.string.settings_adb_port_label), fontSize = 11.sp) },
+              textStyle =
+                MaterialTheme.typography.bodySmall.copy(
+                  fontFamily = FontFamily.Monospace,
+                  color = SLauncherColors.TextPrimary,
+                ),
+              keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+              shape = RoundedCornerShape(12.dp),
+              colors =
+                OutlinedTextFieldDefaults.colors(
+                  focusedBorderColor = SLauncherColors.AccentPrimary,
+                  unfocusedBorderColor = SLauncherColors.GlassBorder,
+                  cursorColor = SLauncherColors.AccentPrimary,
+                ),
+              modifier = Modifier.weight(1f).testTag("debug_adb_port_input"),
+            )
+          }
+
+          if (discoveredEndpoints.isNotEmpty()) {
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+              modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            ) {
+              discoveredEndpoints.forEachIndexed { idx, ep ->
+                Box(
+                  modifier =
+                    Modifier.clip(RoundedCornerShape(50))
+                      .background(SLauncherColors.AccentContainer)
+                      .border(1.dp, SLauncherColors.AccentPrimary.copy(alpha = 0.5f), RoundedCornerShape(50))
+                      .clickable {
+                        hostInput = ep.host
+                        portInput = ep.port.toString()
+                      }
+                      .padding(horizontal = 10.dp, vertical = 5.dp)
+                      .testTag("debug_discovered_ep_$idx"),
+                ) {
+                  Text(
+                    text = "${ep.host}:${ep.port}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    color = SLauncherColors.AccentPrimary,
+                  )
+                }
+              }
+            }
+          }
+
+          Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.fillMaxWidth(),
           ) {
             Button(
               onClick = {
                 if (!isRunning) {
                   isRunning = true
-                  onRebindShizuku { res ->
+                  val port = portInput.toIntOrNull() ?: LocalAdbBridge.DEFAULT_PORT
+                  onConnectAdb(hostInput, port) { res ->
                     lastCommandResult = res
                     isRunning = false
                   }
@@ -278,11 +366,55 @@ fun DebugConsoleDialog(
                   contentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
               shape = RoundedCornerShape(50),
-              modifier = Modifier.weight(1f).testTag("debug_rebind_button"),
+              modifier = Modifier.weight(1f).testTag("debug_connect_adb_button"),
             ) {
-              Icon(Icons.Rounded.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-              Spacer(modifier = Modifier.width(6.dp))
-              Text(stringResource(R.string.debug_btn_rebind), maxLines = 1, overflow = TextOverflow.Ellipsis)
+              Icon(Icons.Rounded.Link, contentDescription = null, modifier = Modifier.size(15.dp))
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(stringResource(R.string.debug_btn_reconnect), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            OutlinedButton(
+              onClick = onScanWirelessAdb,
+              shape = RoundedCornerShape(50),
+              modifier = Modifier.weight(1f).testTag("debug_scan_adb_button"),
+            ) {
+              Icon(
+                Icons.Rounded.Radar,
+                contentDescription = null,
+                tint = SLauncherColors.AccentPrimary,
+                modifier = Modifier.size(15.dp),
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                text = if (isScanning) "Scanning…" else stringResource(R.string.settings_adb_scan_btn),
+                color = SLauncherColors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+          }
+
+          Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth(),
+          ) {
+            OutlinedButton(
+              onClick = onOpenDeveloperOptions,
+              shape = RoundedCornerShape(50),
+              modifier = Modifier.weight(1f).testTag("debug_dev_options_button"),
+            ) {
+              Icon(
+                Icons.Rounded.Settings,
+                contentDescription = null,
+                tint = SLauncherColors.AccentPrimary,
+                modifier = Modifier.size(15.dp),
+              )
+              Spacer(modifier = Modifier.width(4.dp))
+              Text(
+                text = stringResource(R.string.settings_adb_dev_options_btn),
+                color = SLauncherColors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
             }
             OutlinedButton(
               onClick = {
@@ -301,9 +433,9 @@ fun DebugConsoleDialog(
                 Icons.Rounded.LockOpen,
                 contentDescription = null,
                 tint = SLauncherColors.AccentPrimary,
-                modifier = Modifier.size(16.dp),
+                modifier = Modifier.size(15.dp),
               )
-              Spacer(modifier = Modifier.width(6.dp))
+              Spacer(modifier = Modifier.width(4.dp))
               Text(
                 text = stringResource(R.string.debug_btn_disable_keyguard),
                 color = SLauncherColors.TextPrimary,
@@ -314,7 +446,7 @@ fun DebugConsoleDialog(
           }
         }
 
-        // Interactive ADB / Shizuku Shell Bar
+        // Interactive Built-in ADB Shell Bar
         Column(
           verticalArrangement = Arrangement.spacedBy(8.dp),
           modifier =
@@ -377,13 +509,12 @@ fun DebugConsoleDialog(
             }
           }
 
-          // Quick preset ADB commands
           val presets =
             listOf(
               "id",
+              "settings get global heads_up_notifications_enabled",
               "settings get secure lockscreen.disabled",
-              "dumpsys window policy",
-              "appops get com.aistudio.slauncher6.kxzqvm SYSTEM_ALERT_WINDOW",
+              "dumpsys notification --noredact | head -n 20",
             )
           Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),

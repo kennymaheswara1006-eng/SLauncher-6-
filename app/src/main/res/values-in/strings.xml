@@ -198,12 +198,12 @@
     <string name="boot_brand_name">SLauncher 6</string>
     <string name="home_set_default_pill">Jadikan Beranda</string>
 
-    <!-- Shizuku Quick Settings & Kontrol Sistem -->
-    <string name="shizuku_status_connected">Shizuku Aktif • ADB Shell</string>
-    <string name="shizuku_status_connecting">Menghubungkan Shizuku…</string>
-    <string name="shizuku_status_needs_perm">Izinkan Shizuku • Ketuk</string>
-    <string name="shizuku_status_not_running">Shizuku Belum Jalan • Ketuk</string>
-    <string name="shizuku_status_not_installed">Pasang Shizuku untuk Kontrol Penuh</string>
+    <!-- USB & Wireless ADB Bawaan & Kontrol Cepat -->
+    <string name="adb_status_connected">ADB Sendiri Aktif • UID 2000</string>
+    <string name="adb_status_connecting">Menghubungkan ADB…</string>
+    <string name="adb_status_authorizing">Ketuk Izinkan USB Debugging di Layar</string>
+    <string name="adb_status_disabled">Aktifkan USB / Wireless Debugging</string>
+    <string name="adb_status_disconnected">ADB Sendiri Mati • Ketuk</string>
     <string name="qs_wifi">Wi-Fi</string>
     <string name="qs_mobile_data">Data Seluler</string>
     <string name="qs_bluetooth">Bluetooth</string>
@@ -226,25 +226,34 @@
     <string name="settings_lockscreen_biometric_desc">Gunakan sensor sidik jari perangkat di Lock Screen kustom SLauncher 6</string>
     <string name="settings_lockscreen_biometric_auto_toggle">Tampilkan sidik jari otomatis</string>
     <string name="settings_lockscreen_biometric_auto_desc">Otomatis memunculkan dialog sidik jari saat Lock Screen terbuka</string>
-    <string name="settings_lockscreen_shizuku_real_toggle">Matikan layar asli via Shizuku</string>
-    <string name="settings_lockscreen_shizuku_real_desc">Mematikan layar fisik dengan Shizuku (KEYCODE_POWER) saat tombol Kunci ditekan</string>
+    <string name="settings_lockscreen_adb_real_toggle">Matikan layar asli via ADB Sendiri</string>
+    <string name="settings_lockscreen_adb_real_desc">Mematikan layar fisik dengan ADB internal (KEYCODE_SLEEP) saat tombol Kunci ditekan</string>
 
-    <!-- Floating Dynamic Pop-Up & Izin Shizuku -->
+    <!-- Floating Dynamic Pop-Up & Izin ADB Sendiri -->
     <string name="perm_overlay_title">Dynamic Pop-Up Mengambang</string>
     <string name="perm_overlay_desc">Agar kapsul notifikasi tetap muncul di atas WhatsApp, YouTube, &amp; semua aplikasi</string>
-    <string name="perm_shizuku_title">Jembatan Sistem Shizuku (Non-Root)</string>
-    <string name="perm_shizuku_desc">Mengaktifkan tombol Wi-Fi, Data, Bluetooth &amp; lainnya di Quick Settings kustom</string>
+    <string name="perm_adb_title">USB &amp; Wireless ADB Sendiri</string>
+    <string name="perm_adb_desc">Sistem debugging internal SLauncher 6 tanpa perlu aplikasi Shizuku tambahan</string>
+    <string name="perm_notif_policy_title">Anti Notifikasi Double (Tanpa ADB)</string>
+    <string name="perm_notif_policy_desc">Menahan banner pop-up bawaan HP agar tidak menumpuk kapsul saat buka aplikasi</string>
     <string name="settings_notif_floating_toggle">Mengambang di atas semua aplikasi</string>
     <string name="settings_notif_floating_desc">Tetap tampilkan kapsul Dynamic Pop-Up saat membuka aplikasi lain (tidak kembali ke UI normal)</string>
     <string name="settings_notif_overlay_grant_btn">Izinkan Tampil di Atas Aplikasi</string>
+    <string name="settings_notif_policy_grant_btn">Izinkan Anti Notifikasi Double (Tanpa ADB)</string>
     <string name="settings_notif_suppress_headsup_toggle">Sembunyikan banner notifikasi bawaan</string>
-    <string name="settings_notif_suppress_headsup_desc">Gunakan Shizuku agar notifikasi pop-up bawaan sistem tidak menumpuk kapsul</string>
-    <string name="settings_section_shizuku">Shizuku &amp; Kontrol Non-Root</string>
-    <string name="settings_shizuku_connect_btn">Hubungkan / Buka Shizuku</string>
-    <string name="settings_shizuku_autogrant_btn">Aktifkan Izin Overlay &amp; Notifikasi via Shizuku</string>
-    <string name="shizuku_autogrant_success">Izin overlay &amp; notifikasi berhasil diaktifkan via Shizuku</string>
-    <string name="shizuku_autogrant_need_conn">Hubungkan Shizuku terlebih dahulu di aplikasi Shizuku</string>
-    <string name="shizuku_headsup_updated">Pengaturan banner bawaan diperbarui via Shizuku</string>
+    <string name="settings_notif_suppress_headsup_desc">Mematikan banner bawaan via ADB sendiri atau Notification Policy agar tidak double di aplikasi lain</string>
+    <string name="settings_section_adb">USB &amp; Wireless ADB Sendiri (Tanpa Shizuku)</string>
+    <string name="settings_adb_connect_btn">Hubungkan ADB Sendiri</string>
+    <string name="settings_adb_disconnect_btn">Putuskan</string>
+    <string name="settings_adb_scan_btn">Scan Wireless ADB</string>
+    <string name="settings_adb_dev_options_btn">Opsi Pengembang</string>
+    <string name="settings_adb_host_label">Host / IP ADB</string>
+    <string name="settings_adb_port_label">Port</string>
+    <string name="settings_adb_hint_tcpip">Aktifkan USB Debugging (adb tcpip 5555) atau nyalakan Wireless Debugging lalu ketuk Scan Wireless ADB</string>
+    <string name="settings_adb_autogrant_btn">Aktifkan Izin Overlay &amp; Notifikasi via ADB</string>
+    <string name="adb_autogrant_success">Izin overlay &amp; notifikasi diaktifkan via ADB sendiri</string>
+    <string name="adb_need_connection">Hubungkan ADB sendiri atau aktifkan Izin Kebijakan Notifikasi terlebih dahulu</string>
+    <string name="adb_headsup_updated">Anti notifikasi double berhasil diperbarui</string>
 
     <!-- Pilihan Biometrik, Sandi Angka & Anti Double-Lock -->
     <string name="lock_auth_mode_label">Metode Pengaman Lock Screen</string>
@@ -264,9 +273,9 @@
     <string name="settings_anti_double_lock_title">Pencegahan Kunci Ganda (Double-Lock)</string>
     <string name="settings_anti_double_lock_warn">Kunci layar sistem aktif — ubah ke Tidak Ada di Pengaturan Keamanan agar tidak double lock</string>
     <string name="settings_anti_double_lock_ok">Kunci layar sistem terbuka — Lock Screen SLauncher 6 langsung tampil bersih</string>
-    <string name="settings_anti_double_lock_shizuku_btn">Nonaktifkan via Shizuku</string>
-    <string name="shizuku_disable_keyguard_ok">Pengaturan kunci bawaan diperbarui via Shizuku</string>
-    <string name="shizuku_disable_keyguard_fail">Gagal otomatis — ubah Kunci Layar ke Tidak Ada di Pengaturan Sistem</string>
+    <string name="settings_anti_double_lock_adb_btn">Nonaktifkan via ADB</string>
+    <string name="adb_disable_keyguard_ok">Pengaturan kunci bawaan diperbarui via ADB sendiri</string>
+    <string name="adb_disable_keyguard_fail">Gagal otomatis — ubah Kunci Layar ke Tidak Ada di Pengaturan Sistem</string>
 
     <!-- Dialog Pengaturan Sandi Angka -->
     <string name="pin_setup_title_create">Atur Sandi Angka</string>
@@ -287,22 +296,22 @@
     <string name="lockscreen_pin_not_set_hint">Sandi angka belum diatur di Pengaturan</string>
     <string name="lockscreen_swipe_to_auth">Geser ke atas untuk verifikasi</string>
 
-    <!-- Konsol Debugging Internal -->
-    <string name="settings_shizuku_diagnose_btn">Diagnosa &amp; Re-bind Shizuku</string>
-    <string name="settings_debug_console_btn">Buka Konsol Debugging &amp; Log Live</string>
-    <string name="shizuku_rebind_success">Shizuku aktif &amp; merespons: %1$s</string>
-    <string name="shizuku_rebind_failed">Shizuku belum siap: %1$s</string>
-    <string name="debug_console_title">Konsol Debugging</string>
-    <string name="debug_console_subtitle">Shell ADB/Shizuku, diagnosa &amp; log kejadian langsung</string>
-    <string name="debug_cmd_hint">Jalankan perintah Shizuku (mis. id)</string>
+    <!-- Konsol Debugging USB & Wireless ADB Internal -->
+    <string name="settings_adb_diagnose_btn">Diagnosa &amp; Sambungkan ADB</string>
+    <string name="settings_debug_console_btn">Buka Konsol USB/Wireless ADB &amp; Log Live</string>
+    <string name="adb_connect_success">ADB sendiri aktif: %1$s</string>
+    <string name="adb_connect_failed">ADB belum terhubung: %1$s</string>
+    <string name="debug_console_title">Konsol USB &amp; Wireless ADB</string>
+    <string name="debug_console_subtitle">Shell ADB RSA internal, scanner Wireless/USB &amp; log live</string>
+    <string name="debug_cmd_hint">Jalankan perintah ADB (mis. id)</string>
     <string name="debug_cmd_run">Jalankan</string>
-    <string name="debug_btn_rebind">Re-bind Shizuku</string>
+    <string name="debug_btn_reconnect">Hubungkan ADB</string>
     <string name="debug_btn_disable_keyguard">Uji Anti Double-Lock</string>
     <string name="debug_btn_copy">Salin Log</string>
     <string name="debug_btn_clear">Bersihkan</string>
     <string name="debug_logs_copied">Log disalin ke clipboard</string>
     <string name="debug_no_logs">Belum ada log debugging yang tercatat.</string>
-    <string name="debug_section_diagnostics">Diagnosa Sistem</string>
-    <string name="debug_section_shell">Konsol Shell ADB / Shizuku</string>
+    <string name="debug_section_diagnostics">Diagnosa USB &amp; Wireless ADB</string>
+    <string name="debug_section_shell">Konsol Shell ADB Internal</string>
     <string name="debug_section_logs">Log Langsung (%1$d)</string>
 </resources>

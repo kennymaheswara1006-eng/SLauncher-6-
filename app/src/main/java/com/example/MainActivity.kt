@@ -51,8 +51,9 @@ import com.example.notifications.DynamicNotificationItem
 import com.example.notifications.DynamicNotificationStore
 import com.example.notifications.FloatingDynamicOverlayController
 import com.example.notifications.ForegroundActivityTracker
+import com.example.adb.LocalAdbBridge
+import com.example.adb.SystemControlRepository
 import com.example.quicksettings.SystemQuickSettingsHelper
-import com.example.shizuku.SystemControlRepository
 import com.example.ui.LauncherViewModel
 import com.example.ui.components.AppDrawerSheet
 import com.example.ui.components.BiometricAvailability
@@ -110,7 +111,7 @@ class MainActivity : FragmentActivity() {
 
     setContent {
       val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-      val notifications by DynamicNotificationStore.notifications.collectAsStateWithLifecycle()
+      val bannerNotification by DynamicNotificationStore.bannerNotification.collectAsStateWithLifecycle()
       val unlockEventCount by DynamicNotificationStore.unlockEventCount.collectAsStateWithLifecycle()
       val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -144,6 +145,8 @@ class MainActivity : FragmentActivity() {
           postNotificationsGranted = postNotifGranted,
           notificationAccessGranted =
             DynamicNotificationStore.isNotificationAccessGranted(applicationContext),
+          notificationPolicyAccessGranted =
+            DynamicNotificationStore.hasNotificationPolicyAccess(applicationContext),
           overlayPermissionGranted =
             FloatingDynamicOverlayController.canDrawOverlays(applicationContext),
           locationGranted = locationGranted,
@@ -321,7 +324,7 @@ class MainActivity : FragmentActivity() {
 
             HomeScreen(
               uiState = uiState,
-              notifications = notifications,
+              notifications = listOfNotNull(bannerNotification),
               loadIcon = viewModel::loadIcon,
               onLaunchApp = handleLaunchApp,
               onOpenAppInfo = viewModel::openAppInfo,
@@ -340,7 +343,7 @@ class MainActivity : FragmentActivity() {
                 DynamicNotificationStore.openNotificationAccessSettings(this@MainActivity)
               },
               onOpenNotification = handleOpenNotification,
-              onDismissNotification = { DynamicNotificationStore.remove(it.key) },
+              onDismissNotification = { DynamicNotificationStore.clearBanner(it.key) },
               onMusicPlayPause = viewModel::toggleMusicPlayPause,
               onMusicSkipPrevious = viewModel::skipMusicPrevious,
               onMusicSkipNext = viewModel::skipMusicNext,
@@ -362,7 +365,20 @@ class MainActivity : FragmentActivity() {
               onToggleAutoRotate = viewModel::toggleAutoRotate,
               onBrightnessChange = viewModel::setScreenBrightness,
               onVolumeChange = viewModel::setMediaVolumePercent,
-              onConnectShizuku = { viewModel.connectShizuku(this@MainActivity) },
+              onConnectAdb = {
+                viewModel.autoConnectBuiltInAdb { res ->
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(
+                        if (res.success) R.string.adb_connect_success
+                        else R.string.adb_connect_failed,
+                        res.output.ifBlank { res.exitCode.toString() },
+                      ),
+                      Toast.LENGTH_SHORT,
+                    )
+                    .show()
+                }
+              },
               onLockScreen = { viewModel.triggerLockDevice { openLockScreen() } },
               onOpenSettings = viewModel::openSettings,
               onOpenSystemQuickSettings = {
@@ -388,12 +404,13 @@ class MainActivity : FragmentActivity() {
             SettingsScreen(
               visible = uiState.isSettingsOpen,
               settings = uiState.settings,
-              shizukuState = uiState.quickSettingsState.shizukuState,
+              adbState = uiState.quickSettingsState.adbState,
               diagnostics = uiState.diagnosticsSnapshot,
               biometricAvailability = biometricAvailability,
               isPostNotificationsGranted = uiState.isPostNotificationsGranted,
               isLocationGranted = uiState.isLocationGranted,
               isNotificationAccessGranted = uiState.isNotificationAccessGranted,
+              isNotificationPolicyAccessGranted = uiState.isNotificationPolicyAccessGranted,
               isOverlayPermissionGranted = uiState.isOverlayPermissionGranted,
               isDefaultHome = uiState.isDefaultHome,
               onSelectLanguage = viewModel::setLanguage,
@@ -444,14 +461,14 @@ class MainActivity : FragmentActivity() {
               },
               onOpenPinSetup = { isPinSetupDialogOpen = true },
               onToggleBiometricAutoPrompt = viewModel::setBiometricAutoPrompt,
-              onToggleShizukuRealLock = viewModel::setShizukuRealLockEnabled,
-              onDisableSystemKeyguardViaShizuku = {
-                viewModel.attemptDisableSystemKeyguardViaShizuku { res ->
+              onToggleAdbRealLock = viewModel::setShizukuRealLockEnabled,
+              onDisableSystemKeyguardViaAdb = {
+                viewModel.attemptDisableSystemKeyguardViaAdb { res ->
                   Toast.makeText(
                       localizedContext,
                       localizedContext.getString(
-                        if (res.success) R.string.shizuku_disable_keyguard_ok
-                        else R.string.shizuku_disable_keyguard_fail
+                        if (res.success) R.string.adb_disable_keyguard_ok
+                        else R.string.adb_disable_keyguard_fail
                       ),
                       Toast.LENGTH_LONG,
                     )
@@ -467,8 +484,8 @@ class MainActivity : FragmentActivity() {
                   Toast.makeText(
                       localizedContext,
                       localizedContext.getString(
-                        if (ok) R.string.shizuku_headsup_updated
-                        else R.string.shizuku_autogrant_need_conn
+                        if (ok) R.string.adb_headsup_updated
+                        else R.string.adb_need_connection
                       ),
                       Toast.LENGTH_SHORT,
                     )
@@ -477,6 +494,9 @@ class MainActivity : FragmentActivity() {
               },
               onRequestNotificationAccess = {
                 DynamicNotificationStore.openNotificationAccessSettings(this@MainActivity)
+              },
+              onRequestNotificationPolicyAccess = {
+                DynamicNotificationStore.openNotificationPolicyAccessSettings(this@MainActivity)
               },
               onRequestOverlayPermission = {
                 FloatingDynamicOverlayController.openOverlayPermissionSettings(this@MainActivity)
@@ -489,32 +509,49 @@ class MainActivity : FragmentActivity() {
                   appName = localizedContext.getString(R.string.app_name),
                 )
               },
-              onConnectShizuku = { viewModel.connectShizuku(this@MainActivity) },
-              onAutoGrantViaShizuku = {
-                viewModel.autoGrantPrivilegesViaShizuku { ok ->
+              onConnectAdb = { host, port ->
+                viewModel.connectBuiltInAdb(host, port) { res ->
                   refreshAllPermissions()
                   Toast.makeText(
                       localizedContext,
                       localizedContext.getString(
-                        if (ok) R.string.shizuku_autogrant_success
-                        else R.string.shizuku_autogrant_need_conn
+                        if (res.success) R.string.adb_connect_success
+                        else R.string.adb_connect_failed,
+                        res.output.ifBlank { res.exitCode.toString() },
                       ),
-                      Toast.LENGTH_SHORT,
+                      Toast.LENGTH_LONG,
                     )
                     .show()
                 }
               },
-              onDiagnoseRebindShizuku = {
-                viewModel.forceRebindShizuku { res ->
+              onAutoConnectAdb = {
+                viewModel.autoConnectBuiltInAdb { res ->
                   refreshAllPermissions()
                   Toast.makeText(
                       localizedContext,
                       localizedContext.getString(
-                        if (res.success) R.string.shizuku_rebind_success
-                        else R.string.shizuku_rebind_failed,
+                        if (res.success) R.string.adb_connect_success
+                        else R.string.adb_connect_failed,
                         res.output.ifBlank { res.exitCode.toString() },
                       ),
                       Toast.LENGTH_LONG,
+                    )
+                    .show()
+                }
+              },
+              onDisconnectAdb = { viewModel.disconnectBuiltInAdb() },
+              onScanWirelessAdb = { viewModel.startWirelessAdbScan(this@MainActivity) },
+              onOpenDeveloperOptions = { viewModel.openDeveloperOptions(this@MainActivity) },
+              onAutoGrantViaAdb = {
+                viewModel.autoGrantPrivilegesViaAdb { ok ->
+                  refreshAllPermissions()
+                  Toast.makeText(
+                      localizedContext,
+                      localizedContext.getString(
+                        if (ok) R.string.adb_autogrant_success
+                        else R.string.adb_need_connection
+                      ),
+                      Toast.LENGTH_SHORT,
                     )
                     .show()
                 }
@@ -555,18 +592,36 @@ class MainActivity : FragmentActivity() {
                 isPostNotificationsGranted = uiState.isPostNotificationsGranted,
                 isLocationGranted = uiState.isLocationGranted,
                 isNotificationAccessGranted = uiState.isNotificationAccessGranted,
+                isNotificationPolicyAccessGranted = uiState.isNotificationPolicyAccessGranted,
                 isOverlayPermissionGranted = uiState.isOverlayPermissionGranted,
-                shizukuState = uiState.quickSettingsState.shizukuState,
+                adbState = uiState.quickSettingsState.adbState,
                 isDefaultHome = uiState.isDefaultHome,
                 onRequestPostNotifications = requestPostNotificationsPermission,
                 onRequestLocation = requestLocationPermission,
                 onRequestNotificationAccess = {
                   DynamicNotificationStore.openNotificationAccessSettings(this@MainActivity)
                 },
+                onRequestNotificationPolicyAccess = {
+                  DynamicNotificationStore.openNotificationPolicyAccessSettings(this@MainActivity)
+                },
                 onRequestOverlayPermission = {
                   FloatingDynamicOverlayController.openOverlayPermissionSettings(this@MainActivity)
                 },
-                onConnectShizuku = { viewModel.connectShizuku(this@MainActivity) },
+                onConnectAdb = {
+                  viewModel.autoConnectBuiltInAdb { res ->
+                    refreshAllPermissions()
+                    Toast.makeText(
+                        localizedContext,
+                        localizedContext.getString(
+                          if (res.success) R.string.adb_connect_success
+                          else R.string.adb_connect_failed,
+                          res.output.ifBlank { res.exitCode.toString() },
+                        ),
+                        Toast.LENGTH_LONG,
+                      )
+                      .show()
+                  }
+                },
                 onRequestDefaultHome = viewModel::openDefaultHomeSettings,
                 onDismiss = { viewModel.closePermissionsDialog(markPromptShown = true) },
               )
@@ -602,12 +657,16 @@ class MainActivity : FragmentActivity() {
 
             if (uiState.isDebugConsoleOpen) {
               DebugConsoleDialog(
-                shizukuState = uiState.quickSettingsState.shizukuState,
+                adbState = uiState.quickSettingsState.adbState,
                 diagnostics = uiState.diagnosticsSnapshot,
                 onRefreshDiagnostics = viewModel::refreshDiagnostics,
-                onRebindShizuku = { callback -> viewModel.forceRebindShizuku(callback) },
+                onConnectAdb = { host, port, callback ->
+                  viewModel.connectBuiltInAdb(host, port, callback)
+                },
+                onScanWirelessAdb = { viewModel.startWirelessAdbScan(this@MainActivity) },
+                onOpenDeveloperOptions = { viewModel.openDeveloperOptions(this@MainActivity) },
                 onTestDisableKeyguard = { callback ->
-                  viewModel.attemptDisableSystemKeyguardViaShizuku(callback)
+                  viewModel.attemptDisableSystemKeyguardViaAdb(callback)
                 },
                 onRunCommand = { cmd, callback -> viewModel.runDebugShellCommand(cmd, callback) },
                 onDismiss = viewModel::closeDebugConsole,

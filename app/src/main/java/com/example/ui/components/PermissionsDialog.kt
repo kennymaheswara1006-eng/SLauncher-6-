@@ -55,14 +55,16 @@ fun PermissionsDialog(
   isPostNotificationsGranted: Boolean,
   isLocationGranted: Boolean,
   isNotificationAccessGranted: Boolean,
+  isNotificationPolicyAccessGranted: Boolean,
   isOverlayPermissionGranted: Boolean,
-  shizukuState: com.example.shizuku.ShizukuConnectionState,
+  adbState: com.example.adb.AdbConnectionState,
   isDefaultHome: Boolean,
   onRequestPostNotifications: () -> Unit,
   onRequestLocation: () -> Unit,
   onRequestNotificationAccess: () -> Unit,
+  onRequestNotificationPolicyAccess: () -> Unit,
   onRequestOverlayPermission: () -> Unit,
-  onConnectShizuku: () -> Unit,
+  onConnectAdb: () -> Unit,
   onRequestDefaultHome: () -> Unit,
   onDismiss: () -> Unit,
 ) {
@@ -159,13 +161,23 @@ fun PermissionsDialog(
         )
 
         PermissionItemCard(
-          icon = Icons.Rounded.VerifiedUser,
-          title = stringResource(R.string.perm_shizuku_title),
-          description = stringResource(R.string.perm_shizuku_desc),
-          isGranted = shizukuState == com.example.shizuku.ShizukuConnectionState.CONNECTED,
+          icon = Icons.Rounded.Notifications,
+          title = stringResource(R.string.perm_notif_policy_title),
+          description = stringResource(R.string.perm_notif_policy_desc),
+          isGranted = isNotificationPolicyAccessGranted,
           actionLabel = stringResource(R.string.perm_action_setup),
-          onAction = onConnectShizuku,
-          testTag = "perm_shizuku_btn",
+          onAction = onRequestNotificationPolicyAccess,
+          testTag = "perm_notif_policy_btn",
+        )
+
+        PermissionItemCard(
+          icon = Icons.Rounded.VerifiedUser,
+          title = stringResource(R.string.perm_adb_title),
+          description = stringResource(R.string.perm_adb_desc),
+          isGranted = adbState == com.example.adb.AdbConnectionState.CONNECTED,
+          actionLabel = stringResource(R.string.perm_action_setup),
+          onAction = onConnectAdb,
+          testTag = "perm_adb_btn",
         )
 
         PermissionItemCard(

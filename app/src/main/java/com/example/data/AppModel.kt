@@ -147,7 +147,8 @@ enum class WallpaperChoice(val key: String, @param:DrawableRes val drawableRes: 
 }
 
 /**
- * Live state snapshot for SLauncher 6's custom Shizuku-backed Quick Settings Control Center.
+ * Live state snapshot for SLauncher 6's custom Quick Settings Control Center
+ * backed by SLauncher 6's built-in USB & Wireless ADB client.
  */
 data class QuickSettingsState(
   val wifiEnabled: Boolean = false,
@@ -159,8 +160,8 @@ data class QuickSettingsState(
   val autoRotateEnabled: Boolean = false,
   val brightnessLevel: Int = 140,
   val mediaVolumePercent: Int = 60,
-  val shizukuState: com.example.shizuku.ShizukuConnectionState =
-    com.example.shizuku.ShizukuConnectionState.NOT_RUNNING,
+  val adbState: com.example.adb.AdbConnectionState =
+    com.example.adb.AdbConnectionState.DISCONNECTED,
   val headsUpSuppressed: Boolean = false,
 )
 
@@ -233,6 +234,7 @@ data class LauncherUiState(
   val diagnosticsSnapshot: com.example.debug.SystemDiagnosticsSnapshot? = null,
   val isPostNotificationsGranted: Boolean = true,
   val isNotificationAccessGranted: Boolean = false,
+  val isNotificationPolicyAccessGranted: Boolean = false,
   val isOverlayPermissionGranted: Boolean = false,
   val isLocationGranted: Boolean = false,
   val isDefaultHome: Boolean = false,

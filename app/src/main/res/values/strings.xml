@@ -198,12 +198,12 @@
     <string name="boot_brand_name">SLauncher 6</string>
     <string name="home_set_default_pill">Set Default Home</string>
 
-    <!-- Shizuku Quick Settings & System Bridge -->
-    <string name="shizuku_status_connected">Shizuku Active • ADB Shell</string>
-    <string name="shizuku_status_connecting">Connecting Shizuku…</string>
-    <string name="shizuku_status_needs_perm">Shizuku Needs Permission • Tap</string>
-    <string name="shizuku_status_not_running">Shizuku Not Running • Tap</string>
-    <string name="shizuku_status_not_installed">Install Shizuku for Full Control</string>
+    <!-- Built-in USB & Wireless ADB Quick Settings & Bridge -->
+    <string name="adb_status_connected">Built-in ADB Online • UID 2000</string>
+    <string name="adb_status_connecting">Connecting Built-in ADB…</string>
+    <string name="adb_status_authorizing">Tap Allow USB Debugging on Screen</string>
+    <string name="adb_status_disabled">Enable USB / Wireless Debugging</string>
+    <string name="adb_status_disconnected">Built-in ADB Offline • Tap</string>
     <string name="qs_wifi">Wi-Fi</string>
     <string name="qs_mobile_data">Mobile Data</string>
     <string name="qs_bluetooth">Bluetooth</string>
@@ -226,25 +226,34 @@
     <string name="settings_lockscreen_biometric_desc">Use Android hardware fingerprint sensor on the custom Lock Screen</string>
     <string name="settings_lockscreen_biometric_auto_toggle">Auto-prompt fingerprint</string>
     <string name="settings_lockscreen_biometric_auto_desc">Automatically show fingerprint prompt when Lock Screen opens</string>
-    <string name="settings_lockscreen_shizuku_real_toggle">Real screen-off lock via Shizuku</string>
-    <string name="settings_lockscreen_shizuku_real_desc">Turns off the physical display using Shizuku (KEYCODE_POWER) when tapping Lock</string>
+    <string name="settings_lockscreen_adb_real_toggle">Real screen-off lock via Built-in ADB</string>
+    <string name="settings_lockscreen_adb_real_desc">Turns off the physical display using Built-in ADB (KEYCODE_SLEEP) when tapping Lock</string>
 
-    <!-- Floating Dynamic Pop-Up & Shizuku Permissions -->
+    <!-- Floating Dynamic Pop-Up & Built-in ADB Permissions -->
     <string name="perm_overlay_title">Floating Dynamic Pop-Up</string>
     <string name="perm_overlay_desc">Keeps Dynamic Notification capsule floating over WhatsApp, YouTube, and other apps</string>
-    <string name="perm_shizuku_title">Shizuku System Bridge (Non-Root)</string>
-    <string name="perm_shizuku_desc">Enables instant toggles in Custom Quick Settings without root</string>
+    <string name="perm_adb_title">Built-in USB &amp; Wireless ADB</string>
+    <string name="perm_adb_desc">Connects directly inside SLauncher 6 without Shizuku for Quick Settings &amp; system tweaks</string>
+    <string name="perm_notif_policy_title">Prevent Double Heads-Up Banners</string>
+    <string name="perm_notif_policy_desc">Grants DND Peek Policy so stock Android banners do not double over the capsule</string>
     <string name="settings_notif_floating_toggle">Float capsule over all apps</string>
     <string name="settings_notif_floating_desc">Displays Dynamic Pop-Up over third-party apps instead of reverting to stock UI</string>
     <string name="settings_notif_overlay_grant_btn">Allow Floating Over Apps</string>
+    <string name="settings_notif_policy_grant_btn">Allow Anti Double-Banner (No ADB Needed)</string>
     <string name="settings_notif_suppress_headsup_toggle">Suppress stock heads-up banners</string>
-    <string name="settings_notif_suppress_headsup_desc">Uses Shizuku so Android\'s default top banner does not overlap the capsule</string>
-    <string name="settings_section_shizuku">Shizuku &amp; Non-Root Control</string>
-    <string name="settings_shizuku_connect_btn">Connect / Open Shizuku</string>
-    <string name="settings_shizuku_autogrant_btn">Auto-Grant Overlay &amp; Listener via Shizuku</string>
-    <string name="shizuku_autogrant_success">Overlay &amp; notification permissions granted via Shizuku</string>
-    <string name="shizuku_autogrant_need_conn">Connect Shizuku first in the Shizuku app</string>
-    <string name="shizuku_headsup_updated">Stock heads-up setting updated via Shizuku</string>
+    <string name="settings_notif_suppress_headsup_desc">Stops Android\'s default top banner using Built-in ADB or Notification Policy so alerts never double</string>
+    <string name="settings_section_adb">Built-in USB &amp; Wireless ADB</string>
+    <string name="settings_adb_connect_btn">Connect Built-in ADB</string>
+    <string name="settings_adb_disconnect_btn">Disconnect</string>
+    <string name="settings_adb_scan_btn">Scan Wireless ADB</string>
+    <string name="settings_adb_dev_options_btn">Developer Options</string>
+    <string name="settings_adb_host_label">ADB Host / IP</string>
+    <string name="settings_adb_port_label">Port</string>
+    <string name="settings_adb_hint_tcpip">For local USB mode without PC: run \"adb tcpip 5555\" once, or enable Wireless Debugging and tap Scan</string>
+    <string name="settings_adb_autogrant_btn">Auto-Grant Overlay &amp; Listener via ADB</string>
+    <string name="adb_autogrant_success">Overlay &amp; notification permissions granted via Built-in ADB</string>
+    <string name="adb_need_connection">Connect Built-in ADB or allow Notification Policy first</string>
+    <string name="adb_headsup_updated">Anti double-notification policy updated</string>
 
     <!-- Biometric Selection, Numeric PIN & Anti Double-Lock -->
     <string name="lock_auth_mode_label">Unlock Method</string>
@@ -264,9 +273,9 @@
     <string name="settings_anti_double_lock_title">Anti Double-Lock Helper</string>
     <string name="settings_anti_double_lock_warn">Android system lock is active — disable it in Security Settings to prevent locking twice</string>
     <string name="settings_anti_double_lock_ok">Android system lock is open — SLauncher 6 replaces it cleanly</string>
-    <string name="settings_anti_double_lock_shizuku_btn">Disable via Shizuku</string>
-    <string name="shizuku_disable_keyguard_ok">System lockscreen flag updated via Shizuku</string>
-    <string name="shizuku_disable_keyguard_fail">Unable to auto-disable — set Screen Lock to None in System Settings</string>
+    <string name="settings_anti_double_lock_adb_btn">Disable via ADB</string>
+    <string name="adb_disable_keyguard_ok">System lockscreen flag updated via Built-in ADB</string>
+    <string name="adb_disable_keyguard_fail">Unable to auto-disable — set Screen Lock to None in System Settings</string>
 
     <!-- PIN Setup Dialog -->
     <string name="pin_setup_title_create">Set Numeric PIN</string>
@@ -287,22 +296,22 @@
     <string name="lockscreen_pin_not_set_hint">PIN not configured yet in Settings</string>
     <string name="lockscreen_swipe_to_auth">Swipe up to authenticate</string>
 
-    <!-- Internal Debugging Console -->
-    <string name="settings_shizuku_diagnose_btn">Diagnose &amp; Re-bind Shizuku</string>
-    <string name="settings_debug_console_btn">Open Debugging Console &amp; Live Logs</string>
-    <string name="shizuku_rebind_success">Shizuku bound &amp; responding: %1$s</string>
-    <string name="shizuku_rebind_failed">Shizuku not ready: %1$s</string>
-    <string name="debug_console_title">Debugging Console</string>
-    <string name="debug_console_subtitle">ADB/Shizuku shell, diagnostics &amp; live event stream</string>
-    <string name="debug_cmd_hint">Run Shizuku command (e.g. id)</string>
+    <!-- Internal USB & Wireless ADB Debugging Console -->
+    <string name="settings_adb_diagnose_btn">Test &amp; Reconnect Built-in ADB</string>
+    <string name="settings_debug_console_btn">Open USB/Wireless ADB Console &amp; Live Logs</string>
+    <string name="adb_connect_success">Built-in ADB online: %1$s</string>
+    <string name="adb_connect_failed">ADB connection failed: %1$s</string>
+    <string name="debug_console_title">USB &amp; Wireless ADB Console</string>
+    <string name="debug_console_subtitle">Built-in RSA ADB shell, mDNS/USB scanner &amp; live logs</string>
+    <string name="debug_cmd_hint">Run ADB shell command (e.g. id)</string>
     <string name="debug_cmd_run">Run</string>
-    <string name="debug_btn_rebind">Re-bind Shizuku</string>
+    <string name="debug_btn_reconnect">Connect ADB</string>
     <string name="debug_btn_disable_keyguard">Test Anti Double-Lock</string>
     <string name="debug_btn_copy">Copy Logs</string>
     <string name="debug_btn_clear">Clear</string>
     <string name="debug_logs_copied">Logs copied to clipboard</string>
     <string name="debug_no_logs">No debug logs recorded yet.</string>
-    <string name="debug_section_diagnostics">System Diagnostics</string>
-    <string name="debug_section_shell">ADB / Shizuku Shell</string>
+    <string name="debug_section_diagnostics">USB &amp; Wireless ADB Diagnostics</string>
+    <string name="debug_section_shell">Built-in ADB Shell</string>
     <string name="debug_section_logs">Live Logs (%1$d)</string>
 </resources>

@@ -1,6 +1,7 @@
-package com.example.shizuku
+package com.example.adb
 
 import android.app.KeyguardManager
+import android.app.NotificationManager
 import android.app.UiModeManager
 import android.bluetooth.BluetoothManager
 import android.content.ComponentName
@@ -27,10 +28,11 @@ import kotlinx.coroutines.withContext
 
 /**
  * Coordinates real hardware and OS control for the custom Quick Settings Control Center:
- * - Native Android APIs for Flashlight (CameraManager) & Media Volume (AudioManager)
- * - Shizuku (ADB UID 2000) commands for Wi-Fi, Mobile Data, Bluetooth, Dark Mode, Auto-Rotate,
- *   Screen Brightness, Stock Heads-Up control, and Real Screen Lock
- * - Safe Android Settings Panel fallbacks when Shizuku is not active
+ * - Native Android APIs for Flashlight (CameraManager), Media Volume (AudioManager),
+ *   and Notification Policy Peek Suppression (NotificationManager.Policy)
+ * - Built-in Self-Contained USB & Wireless ADB (`LocalAdbBridge`) for Wi-Fi, Mobile Data,
+ *   Bluetooth, Dark Mode, Auto-Rotate, Screen Brightness, Heads-Up control, and Real Screen Lock
+ * - Safe Android Settings Panel fallbacks when built-in ADB is not connected
  */
 class SystemControlRepository(context: Context) {
 
@@ -56,7 +58,7 @@ class SystemControlRepository(context: Context) {
     }
 
   init {
-    ShizukuBridge.init(appContext)
+    LocalAdbBridge.init(appContext)
     registerTorchObserverIfAvailable()
   }
 
@@ -84,7 +86,7 @@ class SystemControlRepository(context: Context) {
 
   suspend fun readQuickSettingsSnapshot(): QuickSettingsState =
     withContext(Dispatchers.IO) {
-      val shizukuState = ShizukuBridge.refreshStatus()
+      val adbState = LocalAdbBridge.refreshStatus()
       val wifiEnabled = runCatching { wifiManager?.isWifiEnabled == true }.getOrDefault(false)
       val bluetoothEnabled =
         runCatching {
@@ -95,8 +97,8 @@ class SystemControlRepository(context: Context) {
           .getOrDefault(false)
 
       val mobileDataEnabled =
-        if (shizukuState == ShizukuConnectionState.CONNECTED) {
-          ShizukuBridge.queryMobileDataEnabled() ?: readNativeMobileData()
+        if (adbState == AdbConnectionState.CONNECTED) {
+          LocalAdbBridge.queryMobileDataEnabled() ?: readNativeMobileData()
         } else {
           readNativeMobileData()
         }
@@ -132,19 +134,7 @@ class SystemControlRepository(context: Context) {
           .coerceIn(10, 255)
 
       val mediaVolPercent = readMediaVolumePercent()
-      val headsUpSuppressed =
-        if (shizukuState == ShizukuConnectionState.CONNECTED) {
-          ShizukuBridge.isHeadsUpNotificationsSuppressed()
-        } else {
-          runCatching {
-              Settings.Global.getInt(
-                appContext.contentResolver,
-                "heads_up_notifications_enabled",
-                1,
-              ) == 0
-            }
-            .getOrDefault(false)
-        }
+      val headsUpSuppressed = isSystemHeadsUpEffectivelySuppressed()
 
       QuickSettingsState(
         wifiEnabled = wifiEnabled,
@@ -156,10 +146,31 @@ class SystemControlRepository(context: Context) {
         autoRotateEnabled = autoRotateEnabled,
         brightnessLevel = brightness,
         mediaVolumePercent = mediaVolPercent,
-        shizukuState = shizukuState,
+        adbState = adbState,
         headsUpSuppressed = headsUpSuppressed,
       )
     }
+
+  private fun isSystemHeadsUpEffectivelySuppressed(): Boolean {
+    val globalZero =
+      runCatching {
+          Settings.Global.getInt(appContext.contentResolver, "heads_up_notifications_enabled", 1) == 0
+        }
+        .getOrDefault(false)
+    if (globalZero) return true
+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      val nm = appContext.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+      if (nm != null && nm.isNotificationPolicyAccessGranted) {
+        val peekSuppressed =
+          (nm.notificationPolicy.suppressedVisualEffects and NotificationManager.Policy.SUPPRESSED_EFFECT_PEEK) != 0
+        if (peekSuppressed && nm.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_PRIORITY) {
+          return true
+        }
+      }
+    }
+    return false
+  }
 
   private fun readNativeMobileData(): Boolean {
     return runCatching {
@@ -185,7 +196,7 @@ class SystemControlRepository(context: Context) {
 
   suspend fun toggleWifi(currentlyEnabled: Boolean): Boolean {
     val target = !currentlyEnabled
-    if (ShizukuBridge.isConnected() && ShizukuBridge.setWifiEnabled(target)) {
+    if (LocalAdbBridge.isConnected() && LocalAdbBridge.setWifiEnabled(target)) {
       return true
     }
     openSettingsFallback(
@@ -197,7 +208,7 @@ class SystemControlRepository(context: Context) {
 
   suspend fun toggleMobileData(currentlyEnabled: Boolean): Boolean {
     val target = !currentlyEnabled
-    if (ShizukuBridge.isConnected() && ShizukuBridge.setMobileDataEnabled(target)) {
+    if (LocalAdbBridge.isConnected() && LocalAdbBridge.setMobileDataEnabled(target)) {
       return true
     }
     openSettingsFallback(
@@ -209,7 +220,7 @@ class SystemControlRepository(context: Context) {
 
   suspend fun toggleBluetooth(currentlyEnabled: Boolean): Boolean {
     val target = !currentlyEnabled
-    if (ShizukuBridge.isConnected() && ShizukuBridge.setBluetoothEnabled(target)) {
+    if (LocalAdbBridge.isConnected() && LocalAdbBridge.setBluetoothEnabled(target)) {
       return true
     }
     openSettingsFallback(Settings.ACTION_BLUETOOTH_SETTINGS)
@@ -230,7 +241,7 @@ class SystemControlRepository(context: Context) {
 
   suspend fun toggleDarkMode(currentlyEnabled: Boolean): Boolean {
     val target = !currentlyEnabled
-    if (ShizukuBridge.isConnected() && ShizukuBridge.setDarkModeEnabled(target)) {
+    if (LocalAdbBridge.isConnected() && LocalAdbBridge.setDarkModeEnabled(target)) {
       return true
     }
     openSettingsFallback(Settings.ACTION_DISPLAY_SETTINGS)
@@ -239,7 +250,7 @@ class SystemControlRepository(context: Context) {
 
   suspend fun toggleAutoRotate(currentlyEnabled: Boolean): Boolean {
     val target = !currentlyEnabled
-    if (ShizukuBridge.isConnected() && ShizukuBridge.setAutoRotateEnabled(target)) {
+    if (LocalAdbBridge.isConnected() && LocalAdbBridge.setAutoRotateEnabled(target)) {
       return true
     }
     if (Settings.System.canWrite(appContext)) {
@@ -259,7 +270,7 @@ class SystemControlRepository(context: Context) {
 
   suspend fun setBrightness(level0To255: Int): Boolean {
     val clamped = level0To255.coerceIn(10, 255)
-    if (ShizukuBridge.isConnected() && ShizukuBridge.setScreenBrightness(clamped)) {
+    if (LocalAdbBridge.isConnected() && LocalAdbBridge.setScreenBrightness(clamped)) {
       return true
     }
     if (Settings.System.canWrite(appContext)) {
@@ -292,39 +303,51 @@ class SystemControlRepository(context: Context) {
     return readMediaVolumePercent()
   }
 
+  /**
+   * Suppresses stock Android heads-up peek notifications so notifications never appear doubled
+   * alongside SLauncher 6's Floating Dynamic Capsule:
+   * 1) Updates `heads_up_notifications_enabled` via built-in ADB when connected.
+   * 2) Also applies Android's native `NotificationManager.Policy(SUPPRESSED_EFFECT_PEEK)` when
+   *    Notification Policy Access (`ACCESS_NOTIFICATION_POLICY`) is granted (works without ADB!).
+   */
   suspend fun setHeadsUpSuppressed(suppress: Boolean): Boolean {
-    if (!ShizukuBridge.isConnected()) return false
-    return ShizukuBridge.setHeadsUpNotificationsSuppressed(suppress)
+    val adbOk =
+      if (LocalAdbBridge.isConnected()) {
+        LocalAdbBridge.setHeadsUpNotificationsSuppressed(suppress)
+      } else {
+        false
+      }
+    val policyOk = DynamicNotificationStore.applyHeadsUpPeekPolicy(appContext, suppress)
+    return adbOk || policyOk
   }
 
-  suspend fun autoGrantPrivilegedPermissionsViaShizuku(): Boolean {
-    if (!ShizukuBridge.isConnected()) return false
+  suspend fun autoGrantPrivilegedPermissionsViaAdb(): Boolean {
+    if (!LocalAdbBridge.isConnected()) return false
     val listenerComponent =
       ComponentName(appContext, SLauncherNotificationListener::class.java).flattenToString()
-    return ShizukuBridge.grantOverlayAndNotificationPermissions(
+    return LocalAdbBridge.grantOverlayAndNotificationPermissions(
       packageName = appContext.packageName,
       listenerComponentFlattened = listenerComponent,
     )
   }
 
-  suspend fun lockScreenViaShizuku(): Boolean {
-    if (!ShizukuBridge.isConnected()) return false
-    return ShizukuBridge.lockDeviceScreen()
+  suspend fun lockScreenViaAdb(): Boolean {
+    if (!LocalAdbBridge.isConnected()) return false
+    return LocalAdbBridge.lockDeviceScreen()
   }
 
   suspend fun collectSystemDiagnostics(isDefaultHome: Boolean): SystemDiagnosticsSnapshot =
     withContext(Dispatchers.IO) {
-      val installed = ShizukuBridge.isInstalled(appContext)
-      val binderAlive = ShizukuBridge.isBinderAlive()
-      val permGranted = ShizukuBridge.hasPermission()
-      val serviceBound = ShizukuBridge.isUserServiceBound()
+      val env = AdbDiscoveryHelper.readEnvironmentStatus(appContext)
+      val adbState = LocalAdbBridge.refreshStatus()
+      val isConnected = adbState == AdbConnectionState.CONNECTED
 
       val uidRes =
-        if (serviceBound) ShizukuBridge.probeUid()
-        else ShizukuCommandResult(false, -1, "UserService not bound")
+        if (isConnected) LocalAdbBridge.probeUid()
+        else AdbCommandResult(false, -1, "ADB not connected")
 
       val lockscreenDisabledSetting =
-        if (serviceBound) ShizukuBridge.querySystemLockscreenDisabledSetting()
+        if (isConnected) LocalAdbBridge.querySystemLockscreenDisabledSetting()
         else {
           runCatching {
               Settings.Secure.getInt(appContext.contentResolver, "lockscreen.disabled", 0)
@@ -357,14 +380,20 @@ class SystemControlRepository(context: Context) {
 
       val snapshot =
         SystemDiagnosticsSnapshot(
-          shizukuInstalled = installed,
-          shizukuBinderAlive = binderAlive,
-          shizukuPermissionGranted = permGranted,
-          userServiceBound = serviceBound,
-          userServiceUidOutput = uidRes.output.ifBlank { "not connected" },
+          developerOptionsEnabled = env.developerOptionsEnabled,
+          usbDebuggingEnabled = env.usbDebuggingEnabled,
+          wirelessDebuggingEnabled = env.wirelessDebuggingEnabled,
+          adbConnected = isConnected,
+          adbEndpoint = "${LocalAdbBridge.targetHost.value}:${LocalAdbBridge.targetPort.value}",
+          localIpAddress = env.localIpv4,
+          usbOtgAdbCount = env.usbOtgAdbDevices.size,
+          adbShellUidOutput = uidRes.output.ifBlank { "not connected" },
           isDefaultHome = isDefaultHome,
           hasOverlayPermission = FloatingDynamicOverlayController.canDrawOverlays(appContext),
           hasNotificationAccess = DynamicNotificationStore.isNotificationAccessGranted(appContext),
+          hasNotificationPolicyAccess =
+            DynamicNotificationStore.hasNotificationPolicyAccess(appContext),
+          systemHeadsUpSuppressed = isSystemHeadsUpEffectivelySuppressed(),
           biometricStatusLabel = bioLabel,
           systemKeyguardLocked = keyguardLocked,
           systemKeyguardSecure = keyguardSecure,
@@ -372,18 +401,22 @@ class SystemControlRepository(context: Context) {
         )
       DebugLogStore.log(
         "Diagnosa",
-        "Shizuku(inst=$installed, binder=$binderAlive, perm=$permGranted, bound=$serviceBound) Bio=$bioLabel KeyguardSecure=$keyguardSecure",
+        "ADB(${LocalAdbBridge.targetHost.value}:${LocalAdbBridge.targetPort.value}, conn=$isConnected, usb=${env.usbDebuggingEnabled}, wifi=${env.wirelessDebuggingEnabled}) HeadsUpOff=${snapshot.systemHeadsUpSuppressed} Bio=$bioLabel",
       )
       snapshot
     }
 
-  suspend fun forceRebindShizuku(): ShizukuCommandResult = ShizukuBridge.forceRebindAndProbe()
+  suspend fun connectBuiltInAdb(host: String, port: Int): AdbCommandResult =
+    LocalAdbBridge.connect(host, port)
 
-  suspend fun runDebugShellCommand(command: String): ShizukuCommandResult =
-    ShizukuBridge.runDebugShellCommand(command)
+  suspend fun autoConnectBuiltInAdb(): AdbCommandResult =
+    LocalAdbBridge.autoConnectBestEndpoint()
 
-  suspend fun attemptDisableSystemKeyguardViaShizuku(): ShizukuCommandResult =
-    ShizukuBridge.attemptDisableSystemKeyguard()
+  suspend fun runDebugShellCommand(command: String): AdbCommandResult =
+    LocalAdbBridge.runDebugShellCommand(command)
+
+  suspend fun attemptDisableSystemKeyguardViaAdb(): AdbCommandResult =
+    LocalAdbBridge.attemptDisableSystemKeyguard()
 
   private fun openSettingsFallback(action: String) {
     runCatching {

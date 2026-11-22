@@ -105,27 +105,38 @@ import com.example.quicksettings.SystemQuickSettingsHelper
 import com.example.quicksettings.WelcomePopupTileService
 import com.example.ui.theme.SLauncherColors
 
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.rounded.LinkOff
+import androidx.compose.material.icons.rounded.Radar
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Terminal
-import com.example.shizuku.ShizukuConnectionState
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.adb.AdbConnectionState
+import com.example.adb.AdbDiscoveryHelper
+import com.example.adb.LocalAdbBridge
 
 /**
  * Comprehensive SLauncher 6 Settings hub for configuring:
  * - Language, Wallpaper Picker, Permissions & Setup checklist
- * - Shizuku & Non-Root Control Center + 1-tap auto-permission grants
+ * - Built-in USB & Wireless ADB Engine + Internal Debugging Console + 1-tap auto-grants
  * - Welcome Dynamic Pop-Up & Floating Dynamic Notification overlay across all apps
- * - Native Lock Screen with hardware Fingerprint / Biometric unlock
+ * - Native Lock Screen with hardware Fingerprint / Biometric unlock & Numeric PIN
  * - Built-in System Quick Settings Tiles & Home Screen layout
  */
 @Composable
 fun SettingsScreen(
   visible: Boolean,
   settings: LauncherSettings,
-  shizukuState: ShizukuConnectionState,
+  adbState: AdbConnectionState,
   diagnostics: SystemDiagnosticsSnapshot?,
   biometricAvailability: BiometricAvailability,
   isPostNotificationsGranted: Boolean,
   isLocationGranted: Boolean,
   isNotificationAccessGranted: Boolean,
+  isNotificationPolicyAccessGranted: Boolean,
   isOverlayPermissionGranted: Boolean,
   isDefaultHome: Boolean,
   onSelectLanguage: (AppLanguage) -> Unit,
@@ -143,19 +154,23 @@ fun SettingsScreen(
   onTestBiometricUnlock: () -> Unit,
   onOpenPinSetup: () -> Unit,
   onToggleBiometricAutoPrompt: (Boolean) -> Unit,
-  onToggleShizukuRealLock: (Boolean) -> Unit,
-  onDisableSystemKeyguardViaShizuku: () -> Unit,
+  onToggleAdbRealLock: (Boolean) -> Unit,
+  onDisableSystemKeyguardViaAdb: () -> Unit,
   onPreviewLockScreen: () -> Unit,
   onOpenSecuritySettings: () -> Unit,
   onToggleDynamicNotifications: (Boolean) -> Unit,
   onToggleFloatingOverlayPopup: (Boolean) -> Unit,
   onToggleSuppressSystemHeadsUp: (Boolean) -> Unit,
   onRequestNotificationAccess: () -> Unit,
+  onRequestNotificationPolicyAccess: () -> Unit,
   onRequestOverlayPermission: () -> Unit,
   onTestDynamicNotification: () -> Unit,
-  onConnectShizuku: () -> Unit,
-  onAutoGrantViaShizuku: () -> Unit,
-  onDiagnoseRebindShizuku: () -> Unit,
+  onConnectAdb: (String, Int) -> Unit,
+  onAutoConnectAdb: () -> Unit,
+  onDisconnectAdb: () -> Unit,
+  onScanWirelessAdb: () -> Unit,
+  onOpenDeveloperOptions: () -> Unit,
+  onAutoGrantViaAdb: () -> Unit,
   onOpenDebugConsole: () -> Unit,
   onToggleAppIconSettingsOnly: (Boolean) -> Unit,
   onToggleBootWelcome: (Boolean) -> Unit,
@@ -488,55 +503,225 @@ fun SettingsScreen(
             }
           }
 
-          // 5. Shizuku, Non-Root System Control & Internal Debugging Console
+          // 5. Built-in USB & Wireless ADB Engine & Internal Debugging Console (Zero Shizuku)
           SettingsCard(
             icon = Icons.Rounded.Terminal,
-            title = stringResource(R.string.settings_section_shizuku),
+            title = stringResource(R.string.settings_section_adb),
           ) {
-            val shizukuStatusLabel =
-              when (shizukuState) {
-                ShizukuConnectionState.CONNECTED -> stringResource(R.string.shizuku_status_connected)
-                ShizukuConnectionState.CONNECTING -> stringResource(R.string.shizuku_status_connecting)
-                ShizukuConnectionState.NEEDS_PERMISSION -> stringResource(R.string.shizuku_status_needs_perm)
-                ShizukuConnectionState.NOT_RUNNING -> stringResource(R.string.shizuku_status_not_running)
-                ShizukuConnectionState.NOT_INSTALLED -> stringResource(R.string.shizuku_status_not_installed)
+            val savedHost by LocalAdbBridge.targetHost.collectAsStateWithLifecycle()
+            val savedPort by LocalAdbBridge.targetPort.collectAsStateWithLifecycle()
+            val discoveredEndpoints by AdbDiscoveryHelper.discoveredEndpoints.collectAsStateWithLifecycle()
+            val isScanningAdb by AdbDiscoveryHelper.isScanning.collectAsStateWithLifecycle()
+
+            var adbHostInput by remember(savedHost) { mutableStateOf(savedHost) }
+            var adbPortInput by remember(savedPort) { mutableStateOf(savedPort.toString()) }
+            val keyFingerprint = remember { LocalAdbBridge.getPublicKeyFingerprint() }
+
+            val adbStatusLabel =
+              when (adbState) {
+                AdbConnectionState.CONNECTED -> stringResource(R.string.adb_status_connected)
+                AdbConnectionState.CONNECTING -> stringResource(R.string.adb_status_connecting)
+                AdbConnectionState.AUTHORIZING -> stringResource(R.string.adb_status_authorizing)
+                AdbConnectionState.DISABLED_IN_SETTINGS -> stringResource(R.string.adb_status_disabled)
+                AdbConnectionState.DISCONNECTED -> stringResource(R.string.adb_status_disconnected)
               }
             Text(
-              text = shizukuStatusLabel,
+              text = adbStatusLabel,
               style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
               color =
-                if (shizukuState == ShizukuConnectionState.CONNECTED) {
-                  SLauncherColors.SoftCapsuleEmerald
-                } else {
-                  SLauncherColors.WarningSoft
+                when (adbState) {
+                  AdbConnectionState.CONNECTED -> SLauncherColors.SoftCapsuleEmerald
+                  AdbConnectionState.CONNECTING,
+                  AdbConnectionState.AUTHORIZING -> SLauncherColors.AccentPrimary
+                  else -> SLauncherColors.WarningSoft
                 },
             )
-            val uidText = diagnostics?.userServiceUidOutput
-            if (!uidText.isNullOrBlank()) {
+
+            diagnostics?.let { snap ->
               Text(
-                text = "UserService: $uidText",
-                style = MaterialTheme.typography.labelSmall,
+                text =
+                  "USB:${if (snap.usbDebuggingEnabled) "ON" else "OFF"} • " +
+                    "WiFi-ADB:${if (snap.wirelessDebuggingEnabled) "ON" else "OFF"} • " +
+                    "OTG:${snap.usbOtgAdbCount} • UID:${snap.adbShellUidOutput}",
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
                 color = SLauncherColors.TextSecondary,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+            if (keyFingerprint.isNotBlank()) {
+              Text(
+                text = "RSA-2048: $keyFingerprint",
+                style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                color = SLauncherColors.TextMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
               )
             }
-            Button(
-              onClick = onConnectShizuku,
-              colors =
-                ButtonDefaults.buttonColors(
-                  containerColor = SLauncherColors.AccentPrimary,
-                  contentColor = MaterialTheme.colorScheme.onPrimary,
-                ),
-              shape = RoundedCornerShape(50),
-              modifier = Modifier.fillMaxWidth().testTag("shizuku_connect_button"),
+
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              verticalAlignment = Alignment.CenterVertically,
+              modifier = Modifier.fillMaxWidth(),
             ) {
-              Text(stringResource(R.string.settings_shizuku_connect_btn))
+              OutlinedTextField(
+                value = adbHostInput,
+                onValueChange = { adbHostInput = it },
+                singleLine = true,
+                label = { Text(stringResource(R.string.settings_adb_host_label), fontSize = 12.sp) },
+                textStyle =
+                  MaterialTheme.typography.bodyMedium.copy(
+                    fontFamily = FontFamily.Monospace,
+                    color = SLauncherColors.TextPrimary,
+                  ),
+                shape = RoundedCornerShape(14.dp),
+                colors =
+                  OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SLauncherColors.AccentPrimary,
+                    unfocusedBorderColor = SLauncherColors.GlassBorder,
+                    focusedLabelColor = SLauncherColors.AccentPrimary,
+                    unfocusedLabelColor = SLauncherColors.TextSecondary,
+                    cursorColor = SLauncherColors.AccentPrimary,
+                  ),
+                modifier = Modifier.weight(1.7f).testTag("settings_adb_host_input"),
+              )
+              OutlinedTextField(
+                value = adbPortInput,
+                onValueChange = { raw -> adbPortInput = raw.filter { it.isDigit() }.take(5) },
+                singleLine = true,
+                label = { Text(stringResource(R.string.settings_adb_port_label), fontSize = 12.sp) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                textStyle =
+                  MaterialTheme.typography.bodyMedium.copy(
+                    fontFamily = FontFamily.Monospace,
+                    color = SLauncherColors.TextPrimary,
+                  ),
+                shape = RoundedCornerShape(14.dp),
+                colors =
+                  OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = SLauncherColors.AccentPrimary,
+                    unfocusedBorderColor = SLauncherColors.GlassBorder,
+                    focusedLabelColor = SLauncherColors.AccentPrimary,
+                    unfocusedLabelColor = SLauncherColors.TextSecondary,
+                    cursorColor = SLauncherColors.AccentPrimary,
+                  ),
+                modifier = Modifier.weight(1f).testTag("settings_adb_port_input"),
+              )
             }
+
+            if (discoveredEndpoints.isNotEmpty()) {
+              Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+              ) {
+                discoveredEndpoints.forEachIndexed { idx, ep ->
+                  LanguageChip(
+                    label = "${ep.host}:${ep.port}",
+                    selected = adbHostInput == ep.host && adbPortInput == ep.port.toString(),
+                    onClick = {
+                      adbHostInput = ep.host
+                      adbPortInput = ep.port.toString()
+                      onConnectAdb(ep.host, ep.port)
+                    },
+                    modifier = Modifier.testTag("settings_adb_discovered_$idx"),
+                  )
+                }
+              }
+            }
+
+            Text(
+              text = stringResource(R.string.settings_adb_hint_tcpip),
+              style = MaterialTheme.typography.bodySmall,
+              color = SLauncherColors.TextSecondary,
+            )
+
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              Button(
+                onClick = {
+                  val port = adbPortInput.toIntOrNull() ?: LocalAdbBridge.DEFAULT_PORT
+                  onConnectAdb(adbHostInput, port)
+                },
+                colors =
+                  ButtonDefaults.buttonColors(
+                    containerColor = SLauncherColors.AccentPrimary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                  ),
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.weight(1f).testTag("adb_connect_button"),
+              ) {
+                Text(
+                  text = stringResource(R.string.settings_adb_connect_btn),
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+              if (adbState == AdbConnectionState.CONNECTED) {
+                OutlinedButton(
+                  onClick = onDisconnectAdb,
+                  shape = RoundedCornerShape(50),
+                  modifier = Modifier.testTag("adb_disconnect_button"),
+                ) {
+                  Icon(
+                    imageVector = Icons.Rounded.LinkOff,
+                    contentDescription = stringResource(R.string.settings_adb_disconnect_btn),
+                    tint = SLauncherColors.WarningSoft,
+                    modifier = Modifier.size(16.dp),
+                  )
+                }
+              }
+            }
+
+            Row(
+              horizontalArrangement = Arrangement.spacedBy(8.dp),
+              modifier = Modifier.fillMaxWidth(),
+            ) {
+              OutlinedButton(
+                onClick = onScanWirelessAdb,
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.weight(1f).testTag("adb_scan_button"),
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Radar,
+                  contentDescription = null,
+                  tint = SLauncherColors.AccentPrimary,
+                  modifier = Modifier.size(16.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = if (isScanningAdb) "Scanning…" else stringResource(R.string.settings_adb_scan_btn),
+                  color = SLauncherColors.AccentPrimary,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+              OutlinedButton(
+                onClick = onOpenDeveloperOptions,
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.weight(1f).testTag("adb_dev_options_button"),
+              ) {
+                Icon(
+                  imageVector = Icons.Rounded.Settings,
+                  contentDescription = null,
+                  tint = SLauncherColors.TextPrimary,
+                  modifier = Modifier.size(16.dp),
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                  text = stringResource(R.string.settings_adb_dev_options_btn),
+                  color = SLauncherColors.TextPrimary,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+            }
+
             OutlinedButton(
-              onClick = onDiagnoseRebindShizuku,
+              onClick = onAutoConnectAdb,
               shape = RoundedCornerShape(50),
-              modifier = Modifier.fillMaxWidth().testTag("shizuku_diagnose_button"),
+              modifier = Modifier.fillMaxWidth().testTag("adb_diagnose_button"),
             ) {
               Icon(
                 imageVector = Icons.Rounded.Refresh,
@@ -546,17 +731,17 @@ fun SettingsScreen(
               )
               Spacer(modifier = Modifier.width(8.dp))
               Text(
-                text = stringResource(R.string.settings_shizuku_diagnose_btn),
+                text = stringResource(R.string.settings_adb_diagnose_btn),
                 color = SLauncherColors.AccentPrimary,
               )
             }
             OutlinedButton(
-              onClick = onAutoGrantViaShizuku,
+              onClick = onAutoGrantViaAdb,
               shape = RoundedCornerShape(50),
-              modifier = Modifier.fillMaxWidth().testTag("shizuku_autogrant_button"),
+              modifier = Modifier.fillMaxWidth().testTag("adb_autogrant_button"),
             ) {
               Text(
-                text = stringResource(R.string.settings_shizuku_autogrant_btn),
+                text = stringResource(R.string.settings_adb_autogrant_btn),
                 color = SLauncherColors.TextPrimary,
               )
             }
@@ -712,14 +897,14 @@ fun SettingsScreen(
             }
 
             SettingsToggleRow(
-              title = stringResource(R.string.settings_lockscreen_shizuku_real_toggle),
-              subtitle = stringResource(R.string.settings_lockscreen_shizuku_real_desc),
+              title = stringResource(R.string.settings_lockscreen_adb_real_toggle),
+              subtitle = stringResource(R.string.settings_lockscreen_adb_real_desc),
               checked = settings.shizukuRealLockEnabled,
-              onCheckedChange = onToggleShizukuRealLock,
-              testTag = "lockscreen_shizuku_real_switch",
+              onCheckedChange = onToggleAdbRealLock,
+              testTag = "lockscreen_adb_real_switch",
             )
 
-            // Anti Double-Lock guidance & Shizuku action
+            // Anti Double-Lock guidance & Built-in ADB action
             val sysSecure = diagnostics?.systemKeyguardSecure == true
             Column(
               verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -747,12 +932,12 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth(),
               ) {
                 OutlinedButton(
-                  onClick = onDisableSystemKeyguardViaShizuku,
+                  onClick = onDisableSystemKeyguardViaAdb,
                   shape = RoundedCornerShape(50),
-                  modifier = Modifier.weight(1f).testTag("disable_keyguard_shizuku_button"),
+                  modifier = Modifier.weight(1f).testTag("disable_keyguard_adb_button"),
                 ) {
                   Text(
-                    text = stringResource(R.string.settings_anti_double_lock_shizuku_btn),
+                    text = stringResource(R.string.settings_anti_double_lock_adb_btn),
                     color = SLauncherColors.AccentPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -827,6 +1012,18 @@ fun SettingsScreen(
                 modifier = Modifier.fillMaxWidth().testTag("grant_overlay_button"),
               ) {
                 Text(stringResource(R.string.settings_notif_overlay_grant_btn))
+              }
+            }
+            if (!isNotificationPolicyAccessGranted) {
+              OutlinedButton(
+                onClick = onRequestNotificationPolicyAccess,
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.fillMaxWidth().testTag("grant_notif_policy_button"),
+              ) {
+                Text(
+                  text = stringResource(R.string.settings_notif_policy_grant_btn),
+                  color = SLauncherColors.AccentPrimary,
+                )
               }
             }
             Row(

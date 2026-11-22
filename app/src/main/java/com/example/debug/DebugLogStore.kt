@@ -18,14 +18,19 @@ data class DebugLogEntry(
 )
 
 data class SystemDiagnosticsSnapshot(
-  val shizukuInstalled: Boolean = false,
-  val shizukuBinderAlive: Boolean = false,
-  val shizukuPermissionGranted: Boolean = false,
-  val userServiceBound: Boolean = false,
-  val userServiceUidOutput: String = "",
+  val developerOptionsEnabled: Boolean = false,
+  val usbDebuggingEnabled: Boolean = false,
+  val wirelessDebuggingEnabled: Boolean = false,
+  val adbConnected: Boolean = false,
+  val adbEndpoint: String = "127.0.0.1:5555",
+  val localIpAddress: String = "127.0.0.1",
+  val usbOtgAdbCount: Int = 0,
+  val adbShellUidOutput: String = "",
   val isDefaultHome: Boolean = false,
   val hasOverlayPermission: Boolean = false,
   val hasNotificationAccess: Boolean = false,
+  val hasNotificationPolicyAccess: Boolean = false,
+  val systemHeadsUpSuppressed: Boolean = false,
   val biometricStatusLabel: String = "",
   val systemKeyguardLocked: Boolean = false,
   val systemKeyguardSecure: Boolean = false,
@@ -34,8 +39,8 @@ data class SystemDiagnosticsSnapshot(
 )
 
 /**
- * In-memory ring buffer storing live diagnostic events across Shizuku, LockScreen,
- * BiometricPrompt, and ADB shell execution so users can troubleshoot directly inside SLauncher 6.
+ * In-memory ring buffer storing live diagnostic events across Built-in ADB (USB/Wireless),
+ * LockScreen, BiometricPrompt, and Notifications so users can troubleshoot directly inside SLauncher 6.
  */
 object DebugLogStore {
 
